@@ -9,4 +9,4 @@ minMagiskVersion=24000
 kernelSU=true
 minKernelSUVersion=10672
 support=https://github.com/opencode-ai/crond
-updateJson=https://raw.githubusercontent.com/YouCD/cron_manager/main/update.json
+updateJson=https://raw.githubusercontent.com/YouCD/cron_manager/refs/heads/master/update.json

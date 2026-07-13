@@ -30,11 +30,32 @@ jobs:
       - name: Save update.json for later sync
         run: cp update.json /tmp/update.json
 
+      - name: Generate release notes
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 "${{ github.ref_name }}"^ 2>/dev/null || echo "")
+          {
+            echo 'notes<<EOF'
+            echo "## 变更"
+            echo ""
+            if [ -z "$PREV_TAG" ]; then
+              git log --pretty=format:"- %s" "${{ github.ref_name }}"
+            else
+              git log --pretty=format:"- %s" "$PREV_TAG..${{ github.ref_name }}"
+            fi
+            echo ""
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              echo "**完整比较**: [$PREV_TAG...${{ github.ref_name }}](https://github.com/${{ github.repository }}/compare/$PREV_TAG...${{ github.ref_name }})"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: crond_injector.zip
-          generate_release_notes: true
+          body: ${{ steps.changelog.outputs.notes }}
 
       - name: Sync update.json to default branch
         run: |

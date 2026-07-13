@@ -45,10 +45,15 @@ class CronTabRepository(private val shell: ShellExecutor) {
         val content = CronParser.renderCrontab(jobs, lastPreserved)
         Log.d(tag, "content=${content.length}B")
         shell.execPipe(content, "su", "-c", "dd", "of=$crontabFile")
-        val code = shell.lastExitCode()
-        Log.d(tag, "setCronJobs exit=$code")
+        var code = shell.lastExitCode()
+        Log.d(tag, "dd exit=$code")
         if (code != 0) {
             throw IllegalStateException("保存定时任务失败 (退出码 $code)")
         }
+        // 通知 dcron 重新读取 crontab（dcron 靠 cron.update 信号文件触发）
+        // 直接用模块内的 crontab binary，避免系统 overlay 未更新
+        shell.exec("su", "-c", "/data/adb/modules/crond_injector/crond/bin/crontab", crontabFile)
+        code = shell.lastExitCode()
+        Log.d(tag, "crontab signal exit=$code")
     }
 }
