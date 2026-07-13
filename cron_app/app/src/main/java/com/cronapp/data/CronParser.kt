@@ -49,6 +49,7 @@ object CronParser {
         var maxId = 0
         while (i < lines.size) {
             val line = lines[i]
+            if (line.isBlank()) { i++; continue }
             val anchor = anchorRegex.find(line)
             if (anchor != null) {
                 val id = anchor.groupValues[1].toInt()

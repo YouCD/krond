@@ -1,5 +1,7 @@
 package com.cronapp.viewmodel
 
+import android.content.ContentResolver
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cronapp.data.CronJob
@@ -159,6 +161,32 @@ class CronViewModel : ViewModel() {
 
     fun clearSnackbar() {
         _state.update { it.copy(snackbarMessage = null) }
+    }
+
+    fun exportToUri(uri: android.net.Uri, contentResolver: android.content.ContentResolver) {
+        viewModelScope.launch {
+            try {
+                val json = withContext(Dispatchers.IO) { repository.exportToJson() }
+                withContext(Dispatchers.IO) {
+                    contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
+                }
+                _state.update { it.copy(snackbarMessage = "已导出 ${state.value.jobs.size} 个任务") }
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = "导出失败: ${e.message}") }
+            }
+        }
+    }
+
+    fun importFromJson(json: String) {
+        viewModelScope.launch {
+            try {
+                val count = withContext(Dispatchers.IO) { repository.importFromJson(json) }
+                refresh()
+                _state.update { it.copy(snackbarMessage = "已导入 $count 个任务") }
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = "导入失败：" + (e.message ?: "格式错误")) }
+            }
+        }
     }
 
     private var logStreamJob: kotlinx.coroutines.Job? = null

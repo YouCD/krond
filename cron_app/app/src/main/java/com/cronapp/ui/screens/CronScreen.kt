@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,13 +21,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PowerOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -64,8 +68,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.cronapp.data.CronJob
 import com.cronapp.viewmodel.CronViewModel
@@ -77,6 +84,28 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var crondMenuExpanded by remember { mutableStateOf(false) }
+    var appMenuExpanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val json = context.contentResolver.openInputStream(uri)
+                    ?.bufferedReader()?.readText() ?: ""
+                viewModel.importFromJson(json)
+            } catch (_: Exception) { }
+        }
+    }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportToUri(uri, context.contentResolver)
+        }
+    }
 
     LaunchedEffect(state.snackbarMessage) {
         state.snackbarMessage?.let {
@@ -118,6 +147,18 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
                     IconButton(onClick = { viewModel.openLogs() }) {
                         Icon(Icons.Default.Terminal, contentDescription = "日志")
                     }
+                    AppMenuButton(
+                        menuExpanded = appMenuExpanded,
+                        onMenuExpandedChange = { appMenuExpanded = it },
+                        onImport = { appMenuExpanded = false; importLauncher.launch(arrayOf("*/*")) },
+                        onExport = {
+                            appMenuExpanded = false
+                            val fileName = java.text.SimpleDateFormat(
+                                "yyyy_MM_dd-HHmmss", java.util.Locale.getDefault()
+                            ).format(java.util.Date()) + "_crond.json"
+                            exportLauncher.launch(fileName)
+                        }
+                    )
                     CrondControlButton(
                         isRunning = state.isCrondRunning,
                         menuExpanded = crondMenuExpanded,
@@ -212,6 +253,7 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
             }
         )
     }
+
 }
 
 @Composable
@@ -518,3 +560,34 @@ fun CronJobDialog(
         }
     )
 }
+
+@Composable
+private fun AppMenuButton(
+    menuExpanded: Boolean,
+    onMenuExpandedChange: (Boolean) -> Unit,
+    onImport: () -> Unit,
+    onExport: () -> Unit
+) {
+    Box {
+        IconButton(onClick = { onMenuExpandedChange(true) }) {
+            Icon(Icons.Default.FileDownload, contentDescription = "导入/导出")
+        }
+        DropdownMenu(
+            expanded = menuExpanded,
+            onDismissRequest = { onMenuExpandedChange(false) }
+        ) {
+            DropdownMenuItem(
+                text = { Text("导入任务") },
+                leadingIcon = { Icon(Icons.Default.ContentPaste, contentDescription = null) },
+                onClick = onImport
+            )
+            DropdownMenuItem(
+                text = { Text("导出任务") },
+                leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                onClick = onExport
+            )
+        }
+    }
+}
+
+

@@ -1,6 +1,6 @@
 id=crond_injector
 name=Crond Injector
-version=v2.1
+version=0.1.0
 versionCode=3
 author=opencode
 description=基于 dcron 的轻量级 crond 服务，支持通过控制脚本动态管理定时任务
@@ -9,3 +9,4 @@ minMagiskVersion=24000
 kernelSU=true
 minKernelSUVersion=10672
 support=https://github.com/opencode-ai/crond
+updateJson=https://raw.githubusercontent.com/YouCD/cron_manager/main/update.json

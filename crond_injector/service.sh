@@ -5,11 +5,17 @@ export PATH=/system/bin:/system/xbin:/sbin:$PATH
 
 MODDIR=${0%/*}
 CROND_BIN=$MODDIR/crond/bin/crond
+CRONTAB_BIN=$MODDIR/crond/bin/crontab
 CROND_LOG=$MODDIR/crond/crond.log
 
 while [ "$(getprop sys.boot_completed)" != "1" ]; do
     sleep 2
 done
+
+# KernelSU hybrid mount 不支持 system/bin 覆盖，用 bind mount 让 crontab 全局可用
+if [ -f "$CRONTAB_BIN" ] && [ ! -x /system/bin/crontab ]; then
+    mount -o bind "$CRONTAB_BIN" /system/bin/crontab 2>/dev/null
+fi
 
 # 确保 dcron 运行目录存在（路径已编译进二进制）
 for dir in /data/cron/crontabs /data/cron/system /data/cron/stamps /data/cron/tmp; do

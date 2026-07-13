@@ -1,5 +1,8 @@
 package com.cronapp.data
 
+import org.json.JSONArray
+import org.json.JSONObject
+
 data class CronJob(
     val id: Int,
     val name: String = "",
@@ -28,4 +31,44 @@ class CronRepository(
     fun restartCrond() = service.restartCrond()
     fun fetchLogs(): List<String> = logs.fetchLogs()
     fun clearLogs() = logs.clearLogs()
+
+    fun exportToJson(): String {
+        val jobs = getCronJobs()
+        val arr = JSONArray()
+        for (job in jobs) {
+            val obj = JSONObject()
+            obj.put("name", job.name)
+            obj.put("schedule", job.schedule)
+            obj.put("command", job.command)
+            obj.put("enabled", job.enabled)
+            arr.put(obj)
+        }
+        return arr.toString(2)
+    }
+
+    fun importFromJson(json: String): Int {
+        val arr = JSONArray(json)
+        val imported = mutableListOf<CronJob>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            imported.add(
+                CronJob(
+                    id = 0,
+                    name = obj.optString("name", ""),
+                    schedule = obj.getString("schedule"),
+                    command = obj.getString("command"),
+                    enabled = obj.optBoolean("enabled", true)
+                )
+            )
+        }
+        if (imported.isEmpty()) return 0
+
+        val current = getCronJobs().toMutableList()
+        val maxId = current.maxOfOrNull { it.id } ?: 0
+        for ((idx, job) in imported.withIndex()) {
+            current.add(job.copy(id = maxId + idx + 1))
+        }
+        setCronJobs(current)
+        return imported.size
+    }
 }
