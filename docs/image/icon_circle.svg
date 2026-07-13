@@ -1,0 +1,41 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 渐变定义 -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3DDC84;stop-opacity:1" /> 
+      <stop offset="100%" style="stop-color:#2A9D5C;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="clockGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2D3748;stop-opacity:1" /> 
+      <stop offset="100%" style="stop-color:#1A202C;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- 圆形背景 -->
+  <circle cx="256" cy="256" r="256" fill="url(#bgGradient)" />
+
+  <!-- 内部深色圆形（模拟时钟表盘） -->
+  <circle cx="256" cy="256" r="190" fill="url(#clockGradient)" stroke="#FFFFFF" stroke-width="6" />
+
+  <!-- Crontab 星号符号 (代表定时任务) -->
+  <g transform="translate(256, 230)">
+    <!-- 五个星号排成一行 -->
+    <text x="-110" y="0" font-family="monospace" font-size="50" fill="#3DDC84" text-anchor="middle">*</text>
+    <text x="-55" y="0" font-family="monospace" font-size="50" fill="#3DDC84" text-anchor="middle">*</text>
+    <text x="0" y="0" font-family="monospace" font-size="50" fill="#3DDC84" text-anchor="middle">*</text>
+    <text x="55" y="0" font-family="monospace" font-size="50" fill="#3DDC84" text-anchor="middle">*</text>
+    <text x="110" y="0" font-family="monospace" font-size="50" fill="#3DDC84" text-anchor="middle">*</text>
+    
+    <!-- 命令提示符 >_ -->
+    <text x="0" y="70" font-family="monospace" font-weight="bold" font-size="60" fill="#FFFFFF" text-anchor="middle">&gt;_</text>
+  </g>
+
+  <!-- 时钟指针 (象征时间流逝) -->
+  <!-- 分针 -->
+  <line x1="256" y1="256" x2="256" y2="130" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" />
+  <!-- 时针 -->
+  <line x1="256" y1="256" x2="330" y2="256" stroke="#3DDC84" stroke-width="10" stroke-linecap="round" />
+  
+  <!-- 中心点 -->
+  <circle cx="256" cy="256" r="12" fill="#3DDC84" stroke="#1A202C" stroke-width="2" />
+</svg>

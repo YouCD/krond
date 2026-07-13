@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Derive version from tag
+        id: ver
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION_NAME="${TAG#v}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NAME"
+          MAJOR="${MAJOR:-0}"; MINOR="${MINOR:-0}"; PATCH="${PATCH:-0}"
+          # 10# 强制十进制，避免前导 0 被当成八进制
+          VERSION_CODE=$(( 10#$MAJOR * 10000 + 10#$MINOR * 100 + 10#$PATCH ))
+          echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Prepare signing keystore
+        id: sign
+        env:
+          KS_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KS_KPASS: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "file=$RUNNER_TEMP/release.keystore" >> "$GITHUB_OUTPUT"
+            echo "pass=$KS_PASS" >> "$GITHUB_OUTPUT"
+            echo "alias=$KS_ALIAS" >> "$GITHUB_OUTPUT"
+            echo "kpass=$KS_KPASS" >> "$GITHUB_OUTPUT"
+          else
+            # 无 secret 时生成临时 debug keystore（每次密钥不同，覆盖安装需先卸载）
+            mkdir -p ~/.android
+            keytool -genkeypair -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
+            echo "file=$HOME/.android/debug.keystore" >> "$GITHUB_OUTPUT"
+            echo "pass=android" >> "$GITHUB_OUTPUT"
+            echo "alias=androiddebugkey" >> "$GITHUB_OUTPUT"
+            echo "kpass=android" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release APK (version injected from tag)
+        working-directory: cron_app
+        env:
+          KEYSTORE_FILE: ${{ steps.sign.outputs.file }}
+          KEYSTORE_PASSWORD: ${{ steps.sign.outputs.pass }}
+          KEY_ALIAS: ${{ steps.sign.outputs.alias }}
+          KEY_PASSWORD: ${{ steps.sign.outputs.kpass }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease \
+            -PversionName=${{ steps.ver.outputs.name }} \
+            -PversionCode=${{ steps.ver.outputs.code }}
+
+      - name: Inject version into module.prop
+        run: |
+          sed -i "s/^version=.*/version=v${{ steps.ver.outputs.name }}/" crond_injector/module.prop
+          sed -i "s/^versionCode=.*/versionCode=${{ steps.ver.outputs.code }}/" crond_injector/module.prop
+          echo "module.prop -> version=v${{ steps.ver.outputs.name }} versionCode=${{ steps.ver.outputs.code }}"
+
+      - name: Package KernelSU module (includes app)
+        run: |
+          cd crond_injector
+          # App 作为普通应用随模块分发，由 service.sh 在开机后 pm install，卸载时延迟到开机完成后 pm uninstall
+          cp ../cron_app/app/build/outputs/apk/release/app-release.apk CrondInjector.apk
+          zip -r ../crond_injector.zip .
+          cd ..
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.ver.outputs.tag }}
+          tag_name: ${{ steps.ver.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            cron_app/app/build/outputs/apk/release/app-release.apk
+            crond_injector.zip

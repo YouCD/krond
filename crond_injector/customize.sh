@@ -1,5 +1,8 @@
 #!/system/bin/sh
 
+# 管理 App 通过模块 overlay（system/app/CrondInjector/CrondInjector.apk）挂载为系统应用，
+# 此处保留该目录，不再清理。
+
 # 设置二进制权限
 set_perm $MODPATH/crond/bin/crond 0 0 0755
 set_perm $MODPATH/crond/bin/crontab 0 0 0755
