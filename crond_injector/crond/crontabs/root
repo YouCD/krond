@@ -1,0 +1,7 @@
+# dcron crontab - root 用户
+# 格式: 分 时 日 月 星期 命令
+# 每天 12:00 输出测试日志
+0 12 * * * echo "[$(date)] dcron 定时任务执行" >> /data/cron/crond.log
+
+# 每天 03:00 清理临时文件示例（取消注释启用）
+# 0 3 * * * find /data/local/tmp -type f -name "*.tmp" -mtime +7 -delete
