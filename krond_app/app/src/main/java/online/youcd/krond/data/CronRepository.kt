@@ -8,6 +8,12 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
+data class ScriptDetail(
+    val name: String,
+    val size: String = "",
+    val permissions: String = ""
+)
+
 data class CronJob(
     val id: Int,
     val name: String = "",
@@ -56,27 +62,43 @@ class CronRepository(
 
     private val scriptsDir = "/data/krond/scripts"
 
-    fun listScripts(): List<String> {
-        val out = shell.exec("su", "-c", "ls -1 $scriptsDir 2>/dev/null || echo __EMPTY__")
-        return out.lines().map { it.trim() }.filter { it.isNotBlank() && it != "__EMPTY__" }
+    fun listScriptDetails(): List<ScriptDetail> {
+        val out = shell.exec("su", "-c", "ls -l '$scriptsDir' 2>/dev/null || echo __EMPTY__")
+        return out.lines().mapNotNull { line ->
+            val trimmed = line.trim()
+            if (trimmed.isBlank() || trimmed == "__EMPTY__" || trimmed.startsWith("total")) return@mapNotNull null
+            val parts = trimmed.split(Regex("\\s+"))
+            if (parts.size < 8) return@mapNotNull null
+            ScriptDetail(
+                name = parts.drop(7).joinToString(" "),
+                size = parts[4],
+                permissions = parts[0]
+            )
+        }
+    }
+
+    /** 确保文件名安全（不含路径分隔符、无特殊 shell 字符） */
+    private fun safeScriptName(name: String): String {
+        return name.substringAfterLast("/").substringBefore("?")
     }
 
     fun uploadScript(name: String, content: ByteArray): Boolean {
-        shell.execPipe("cat > $scriptsDir/$name", content.decodeToString())
+        val safe = safeScriptName(name)
+        shell.execPipe("cat > '$scriptsDir/$safe'", content.decodeToString())
         if (shell.lastExitCode() != 0) return false
-        shell.exec("su", "-c", "chmod 755 $scriptsDir/$name")
+        shell.exec("su", "-c", "chmod 755 '$scriptsDir/$safe'")
         return shell.lastExitCode() == 0
     }
 
     fun deleteScript(name: String): Boolean {
-        shell.exec("su", "-c", "rm -f $scriptsDir/$name")
+        shell.exec("su", "-c", "rm -f '$scriptsDir/$name'")
         return shell.lastExitCode() == 0
     }
 
-    fun readScript(name: String): ByteArray? {
-        val out = shell.exec("su", "-c", "cat $scriptsDir/$name")
+    fun readScriptContent(name: String): String? {
+        val out = shell.exec("su", "-c", "cat '$scriptsDir/$name'")
         if (shell.lastExitCode() != 0) return null
-        return out.toByteArray()
+        return out
     }
 
     fun exportToZip(): ByteArray {
@@ -86,10 +108,10 @@ class CronRepository(
             zos.write(exportToJson().toByteArray())
             zos.closeEntry()
 
-            for (script in listScripts()) {
-                val content = readScript(script) ?: continue
-                zos.putNextEntry(ZipEntry("scripts/$script"))
-                zos.write(content)
+            for (script in listScriptDetails()) {
+                val content = readScriptContent(script.name) ?: continue
+                zos.putNextEntry(ZipEntry("scripts/${script.name}"))
+                zos.write(content.toByteArray())
                 zos.closeEntry()
             }
         }

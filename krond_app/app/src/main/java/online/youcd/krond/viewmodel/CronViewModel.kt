@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import online.youcd.krond.data.CronJob
 import online.youcd.krond.data.CronRepository
+import online.youcd.krond.data.ScriptDetail
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,8 +29,10 @@ data class CronUiState(
     val isRefreshing: Boolean = false,
     val pendingDeleteJob: CronJob? = null,
     val currentLogTarget: String = "both",
-    val scripts: List<String> = emptyList(),
-    val showScriptsDialog: Boolean = false
+    val scripts: List<ScriptDetail> = emptyList(),
+    val showScriptsDialog: Boolean = false,
+    val selectedScriptContent: String? = null,
+    val showScriptContent: Boolean = false
 )
 
 class CronViewModel : ViewModel() {
@@ -66,6 +69,13 @@ class CronViewModel : ViewModel() {
         }
     }
 
+    /** 同步刷新任务列表和 krond 状态（在调用协程内执行） */
+    private suspend fun syncRefresh() {
+        val jobs = withContext(Dispatchers.IO) { repository.getCronJobs() }
+        val running = withContext(Dispatchers.IO) { repository.isKrondRunning() }
+        _state.update { it.copy(jobs = jobs, isKrondRunning = running) }
+    }
+
     fun addJob(schedule: String, command: String, name: String = "") {
         viewModelScope.launch {
             try {
@@ -75,7 +85,7 @@ class CronViewModel : ViewModel() {
                     current.add(CronJob(id = newId, name = name, schedule = schedule, command = command, enabled = true))
                     repository.setCronJobs(current)
                 }
-                refresh()
+                syncRefresh()
                 _state.update { it.copy(snackbarMessage = "已添加任务") }
             } catch (e: Exception) {
                 _state.update { it.copy(snackbarMessage = e.message ?: "添加失败") }
@@ -94,7 +104,7 @@ class CronViewModel : ViewModel() {
                         repository.setCronJobs(current)
                     }
                 }
-                refresh()
+                syncRefresh()
                 _state.update { it.copy(snackbarMessage = "已保存修改") }
             } catch (e: Exception) {
                 _state.update { it.copy(snackbarMessage = e.message ?: "保存失败") }
@@ -113,7 +123,7 @@ class CronViewModel : ViewModel() {
                         repository.setCronJobs(current)
                     }
                 }
-                refresh()
+                syncRefresh()
             } catch (e: Exception) {
                 _state.update { it.copy(snackbarMessage = e.message ?: "操作失败") }
             }
@@ -138,7 +148,7 @@ class CronViewModel : ViewModel() {
                     current.removeAll { it.id == job.id }
                     repository.setCronJobs(current)
                 }
-                refresh()
+                syncRefresh()
                 _state.update { it.copy(snackbarMessage = "已删除任务") }
             } catch (e: Exception) {
                 _state.update { it.copy(snackbarMessage = e.message ?: "删除失败") }
@@ -193,11 +203,12 @@ class CronViewModel : ViewModel() {
                 val (tasks, scripts) = withContext(Dispatchers.IO) {
                     repository.importFromZip(bytes)
                 }
-                refresh()
+                val jobs = withContext(Dispatchers.IO) { repository.getCronJobs() }
+                val running = withContext(Dispatchers.IO) { repository.isKrondRunning() }
                 val parts = mutableListOf<String>()
                 if (tasks > 0) parts.add("$tasks 个任务")
                 if (scripts > 0) parts.add("$scripts 个脚本")
-                _state.update { it.copy(snackbarMessage = "已导入 ${parts.joinToString(", ")}") }
+                _state.update { it.copy(jobs = jobs, isKrondRunning = running, snackbarMessage = "已导入 ${parts.joinToString(", ")}") }
             } catch (e: Exception) {
                 _state.update { it.copy(snackbarMessage = "导入失败：" + (e.message ?: "格式错误")) }
             }
@@ -206,7 +217,7 @@ class CronViewModel : ViewModel() {
 
     fun loadScripts() {
         viewModelScope.launch {
-            val list = withContext(Dispatchers.IO) { repository.listScripts() }
+            val list = withContext(Dispatchers.IO) { repository.listScriptDetails() }
             _state.update { it.copy(scripts = list) }
         }
     }
@@ -214,7 +225,20 @@ class CronViewModel : ViewModel() {
     fun uploadScript(uri: android.net.Uri, contentResolver: android.content.ContentResolver) {
         viewModelScope.launch {
             try {
-                val name = uri.lastPathSegment ?: "script.sh"
+                val name = withContext(Dispatchers.IO) {
+                    var n: String? = null
+                    try {
+                        val cursor = contentResolver.query(uri, null, null, null, null)
+                        cursor?.use {
+                            if (it.moveToFirst()) {
+                                val idx = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                                if (idx >= 0) n = it.getString(idx)
+                            }
+                        }
+                    } catch (_: Exception) {}
+                    if (n.isNullOrBlank()) n = uri.lastPathSegment
+                    if (n.isNullOrBlank()) "script.sh" else n!!
+                }
                 val bytes = withContext(Dispatchers.IO) {
                     contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 }
@@ -237,6 +261,17 @@ class CronViewModel : ViewModel() {
             _state.update { it.copy(snackbarMessage = if (ok) "已删除: $name" else "删除失败") }
             if (ok) loadScripts()
         }
+    }
+
+    fun viewScript(name: String) {
+        viewModelScope.launch {
+            val content = withContext(Dispatchers.IO) { repository.readScriptContent(name) }
+            _state.update { it.copy(selectedScriptContent = content ?: "读取失败", showScriptContent = true) }
+        }
+    }
+
+    fun hideScriptContent() {
+        _state.update { it.copy(selectedScriptContent = null, showScriptContent = false) }
     }
 
     fun showScriptsDialog() {
@@ -341,8 +376,8 @@ class CronViewModel : ViewModel() {
                     if (running) break
                     kotlinx.coroutines.delay(300)
                 }
+                if (running) syncRefresh()
                 _state.update { it.copy(isKrondRunning = running, snackbarMessage = if (running) "krond 已启动" else "krond 启动失败") }
-                if (running) refresh()
             } catch (e: Exception) {
                 _state.update { it.copy(snackbarMessage = e.message ?: "启动失败") }
             }
@@ -354,8 +389,8 @@ class CronViewModel : ViewModel() {
             try {
                 withContext(Dispatchers.IO) { repository.stopKrond() }
                 val running = withContext(Dispatchers.IO) { repository.isKrondRunning() }
+                if (!running) syncRefresh()
                 _state.update { it.copy(isKrondRunning = running, snackbarMessage = if (!running) "krond 已停止" else "krond 停止失败") }
-                if (!running) refresh()
             } catch (e: Exception) {
                 _state.update { it.copy(snackbarMessage = e.message ?: "停止失败") }
             }
@@ -372,8 +407,8 @@ class CronViewModel : ViewModel() {
                     if (running) break
                     kotlinx.coroutines.delay(300)
                 }
+                if (running) syncRefresh()
                 _state.update { it.copy(isKrondRunning = running, snackbarMessage = if (running) "krond 已重启" else "krond 重启失败") }
-                if (running) refresh()
             } catch (e: Exception) {
                 _state.update { it.copy(snackbarMessage = e.message ?: "重启失败") }
             }
