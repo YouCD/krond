@@ -315,7 +315,7 @@ private fun CronJobList(
     ) {
         if (enabledJobs.isNotEmpty()) {
             stickyHeader { SectionHeader("已开启", enabledJobs.size, Color(0xFF4CAF50)) }
-            items(enabledJobs, key = { it.id }) { job ->
+            items(enabledJobs, key = { "enabled_${it.id}" }) { job ->
                 CronJobCard(
                     job = job,
                     onToggle = { onToggle(job) },
@@ -326,7 +326,7 @@ private fun CronJobList(
         }
         if (disabledJobs.isNotEmpty()) {
             stickyHeader { SectionHeader("未开启", disabledJobs.size, Color(0xFFF44336)) }
-            items(disabledJobs, key = { it.id }) { job ->
+            items(disabledJobs, key = { "disabled_${it.id}" }) { job ->
                 CronJobCard(
                     job = job,
                     onToggle = { onToggle(job) },

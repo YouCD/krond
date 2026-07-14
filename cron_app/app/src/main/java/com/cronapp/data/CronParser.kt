@@ -76,28 +76,6 @@ object CronParser {
                 i++
                 continue
             }
-            val trimmed = line.trimStart()
-            if (trimmed.startsWith("# ") && !trimmed.startsWith("# [cronapp]")) {
-                val potentialName = trimmed.removePrefix("# ").trim()
-                var j = i + 1
-                while (j < lines.size && lines[j].isBlank()) j++
-                val parsed = if (j < lines.size) parseCommandLine(lines[j]) else null
-                if (parsed != null) {
-                    maxId++
-                    val (schedule, command, enabled) = parsed
-                    jobs.add(
-                        CronJob(
-                            id = maxId,
-                            name = potentialName,
-                            schedule = schedule,
-                            command = command,
-                            enabled = enabled
-                        )
-                    )
-                    i = j + 1
-                    continue
-                }
-            }
             preserved.add(line)
             i++
         }

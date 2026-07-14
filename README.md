@@ -282,6 +282,68 @@ fun getCronTab(): String {
 
 ---
 
+---
+
+## 与 DataBackup / speed-backup 集成
+
+[DataBackup](https://github.com/XayahSuSuSu/Android-DataBackup) 是基于 [speed-backup](https://github.com/YAWAsau/backup_script) shell 脚本的图形化备份工具。
+speed-backup 本身是纯 shell 脚本，可以直接被 crond 定时调用，实现无人值守自动备份。
+
+### 安装 speed-backup
+
+```bash
+# 1. 从 GitHub Release 下载
+cd /data/cron
+wget https://github.com/YAWAsau/backup_script/releases/latest/download/backup_script.zip
+unzip backup_script.zip -d speed-backup
+
+# 2. 首次运行生成 appList.txt（交互式，只需一次）
+cd speed-backup
+sh start.sh
+# 选择「生成应用列表」→ 稍等 → 编辑 appList.txt，
+# 用 # 注释掉不想自动备份的 app
+
+# 3. 设置后台模式
+sed -i 's/^background_execution=.*/background_execution=1/' backup_settings.conf
+```
+
+### 配置 crond 定时备份
+
+模块已提供封装脚本 `scripts/databackup_cron.sh`：
+
+```bash
+# 将脚本复制到模块目录（推送后直接可用）
+cp /data/adb/modules/crond_injector/scripts/databackup_cron.sh /data/cron/scripts/
+chmod +x /data/cron/scripts/databackup_cron.sh
+
+# 添加到 crontab，每天凌晨 3 点执行
+echo "0 3 * * * /data/cron/scripts/databackup_cron.sh" | crontab -
+```
+
+脚本功能：
+- 检查 speed-backup 是否安装
+- 检查 appList.txt 是否存在
+- 自动设 `background_execution=1`
+- 调用 start.sh 的非交互备份模式
+- 日志写入 `/data/cron/databackup.log`
+
+### 自定义备份频率
+
+```bash
+# 编辑 crontab
+crontab -e
+
+# 示例：每周日凌晨 4 点
+0 4 * * 0 /data/cron/scripts/databackup_cron.sh
+
+# 示例：每晚 23 点
+0 23 * * * /data/cron/scripts/databackup_cron.sh
+```
+
+> speed-backup 会增量备份（版本号/数据大小/权限/SSAID 多维度比对），无变化自动跳过，不会每次都全量跑。
+
+---
+
 ## 常见问题
 
 ### Q: crond 启动后立刻崩溃？
