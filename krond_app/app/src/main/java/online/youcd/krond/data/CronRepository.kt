@@ -20,7 +20,10 @@ data class CronJob(
     val schedule: String,
     val command: String,
     val enabled: Boolean,
-    val next: String = ""
+    val next: String = "",
+    val lastRun: String = "",
+    val lastDuration: String = "",
+    val lastExitCode: Int? = null
 )
 
 class CronRepository(
@@ -39,6 +42,7 @@ class CronRepository(
     fun startKrond() = service.startKrond()
     fun stopKrond() = service.stopKrond()
     fun restartKrond() = service.restartKrond()
+    fun runJob(id: Int) = cronTab.runJob(id)
 
     fun fetchLogs(): List<String> = logs.fetchLogs()
     fun clearLogs() = logs.clearLogs()

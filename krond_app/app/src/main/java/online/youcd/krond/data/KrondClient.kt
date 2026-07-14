@@ -39,7 +39,10 @@ class KrondClient {
                         schedule = obj.getString("schedule"),
                         command = obj.getString("command"),
                         enabled = obj.getBoolean("enabled"),
-                        next = obj.optString("next", "")
+                        next = obj.optString("next", ""),
+                        lastRun = obj.optString("last_run", ""),
+                        lastDuration = obj.optString("last_duration", ""),
+                        lastExitCode = if (obj.has("last_exit_code") && !obj.isNull("last_exit_code")) obj.getInt("last_exit_code") else null
                     )
                 )
             }
@@ -107,6 +110,16 @@ class KrondClient {
             }
         } catch (_: Exception) {
             "both"
+        }
+    }
+
+    fun runJob(id: Int) {
+        val request = Request.Builder()
+            .url("$baseUrl/api/jobs/$id/run")
+            .post("".toRequestBody(null))
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
         }
     }
 

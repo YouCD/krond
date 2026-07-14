@@ -126,8 +126,9 @@ func setupLogger(cfg *Config) {
 	}
 
 	logWriter = &dynamicWriter{
-		file:   logFile,
-		target: cfg.LogTarget,
+		file:     logFile,
+		filePath: cfg.LogFile,
+		target:   cfg.LogTarget,
 	}
 
 	appLogger = log.New(logWriter, "", log.Ldate|log.Ltime|log.Lshortfile)

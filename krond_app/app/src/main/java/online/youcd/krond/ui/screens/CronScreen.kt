@@ -219,6 +219,7 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
                 CronJobList(
                     jobs = state.jobs,
                     onToggle = { viewModel.toggleJob(it) },
+                    onRun = { viewModel.runJob(it) },
                     onEdit = { viewModel.showEditDialog(it) },
                     onDelete = { viewModel.requestDeleteJob(it) },
                     modifier = Modifier.fillMaxSize()
@@ -470,6 +471,7 @@ private fun NoRootView(modifier: Modifier = Modifier) {
 private fun CronJobList(
     jobs: List<CronJob>,
     onToggle: (CronJob) -> Unit,
+    onRun: (CronJob) -> Unit,
     onEdit: (CronJob) -> Unit,
     onDelete: (CronJob) -> Unit,
     modifier: Modifier = Modifier
@@ -500,6 +502,7 @@ private fun CronJobList(
                 CronJobCard(
                     job = job,
                     onToggle = { onToggle(job) },
+                    onRun = { onRun(job) },
                     onEdit = { onEdit(job) },
                     onDelete = { onDelete(job) }
                 )
@@ -511,6 +514,7 @@ private fun CronJobList(
                 CronJobCard(
                     job = job,
                     onToggle = { onToggle(job) },
+                    onRun = { onRun(job) },
                     onEdit = { onEdit(job) },
                     onDelete = { onDelete(job) }
                 )
@@ -547,6 +551,7 @@ private fun SectionHeader(title: String, count: Int, color: Color) {
 private fun CronJobCard(
     job: CronJob,
     onToggle: () -> Unit,
+    onRun: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -597,6 +602,21 @@ private fun CronJobCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    if (job.lastRun.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        val statusColor = if (job.lastExitCode != null && job.lastExitCode != 0)
+                            MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                        val label = buildString {
+                            append("上次: ${formatTime(job.lastRun)}")
+                            if (job.lastDuration.isNotBlank()) append(" (${job.lastDuration})")
+                            if (job.lastExitCode != null) append(" 退出码=${job.lastExitCode}")
+                        }
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = statusColor
+                        )
+                    }
                     Spacer(Modifier.height(2.dp))
                     Text(
                         text = job.command,
@@ -605,23 +625,28 @@ private fun CronJobCard(
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Box {
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("编辑") },
-                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                            onClick = { menuExpanded = false; onEdit() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("删除") },
-                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
-                            onClick = { menuExpanded = false; onDelete() }
-                        )
+                    Box {
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("立即执行") },
+                                leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
+                                onClick = { menuExpanded = false; onRun() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("编辑") },
+                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                onClick = { menuExpanded = false; onEdit() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("删除") },
+                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                                onClick = { menuExpanded = false; onDelete() }
+                            )
+                        }
                     }
-                }
             }
     }
 }
@@ -782,6 +807,15 @@ fun CronJobDialog(
             }
         }
     )
+}
+
+private fun formatTime(rfc3339: String): String {
+    return try {
+        val zdt = ZonedDateTime.parse(rfc3339)
+        zdt.format(DateTimeFormatter.ofPattern("MM-dd HH:mm:ss"))
+    } catch (_: Exception) {
+        rfc3339
+    }
 }
 
 private fun formatNextTime(rfc3339: String): String {

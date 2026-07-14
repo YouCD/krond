@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -14,16 +15,52 @@ import (
 	"time"
 )
 
+const (
+	logMaxSize  = 1024 * 1024  // 1MB 触发轮转
+	logMaxFiles = 3             // 保留 3 个备份
+)
+
 type dynamicWriter struct {
-	mu     sync.RWMutex
-	file   *os.File
-	target string
+	mu        sync.RWMutex
+	file      *os.File
+	filePath  string
+	target    string
+	writeSize int64
+}
+
+func (w *dynamicWriter) maybeRotate() error {
+	fi, err := w.file.Stat()
+	if err != nil {
+		return err
+	}
+	if fi.Size() < logMaxSize {
+		return nil
+	}
+
+	w.file.Close()
+
+	// 删除最旧的备份
+	os.Remove(w.filePath + ".3")
+
+	// 依次重命名 .2 -> .3, .1 -> .2
+	for i := logMaxFiles - 1; i >= 1; i-- {
+		old := w.filePath + fmt.Sprintf(".%d", i)
+		new := w.filePath + fmt.Sprintf(".%d", i+1)
+		os.Rename(old, new)
+	}
+	os.Rename(w.filePath, w.filePath+".1")
+
+	f, err := os.OpenFile(w.filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	w.file = f
+	return nil
 }
 
 func androidLogPrint(msg string) {
 	for _, line := range strings.Split(strings.TrimSuffix(msg, "\n"), "\n") {
 		if err := exec.Command("/system/bin/log", "-t", "krond", "-p", "I", line).Run(); err != nil {
-			// log 命令失败时降级到 /dev/kmsg
 			if f, e := os.OpenFile("/dev/kmsg", os.O_WRONLY, 0); e == nil {
 				f.Write([]byte("<4>krond: " + line + "\n"))
 				f.Close()
@@ -39,15 +76,18 @@ func (w *dynamicWriter) Write(p []byte) (int, error) {
 
 	switch target {
 	case "file":
+		w.maybeRotate()
 		return w.file.Write(p)
 	case "logcat":
 		androidLogPrint(string(p))
 		return len(p), nil
 	case "both":
+		w.maybeRotate()
 		n, err := w.file.Write(p)
 		androidLogPrint(string(p))
 		return n, err
 	default:
+		w.maybeRotate()
 		return w.file.Write(p)
 	}
 }
@@ -79,6 +119,7 @@ func startHTTPServer(cfg *Config, sched *Scheduler) *http.Server {
 	mux.HandleFunc("PUT /api/jobs/{id}", handleUpdateJob)
 	mux.HandleFunc("DELETE /api/jobs/{id}", handleDeleteJob)
 	mux.HandleFunc("POST /api/jobs/{id}/toggle", handleToggleJob)
+	mux.HandleFunc("POST /api/jobs/{id}/run", handleRunJob)
 	mux.HandleFunc("GET /api/status", handleStatus(sched))
 	mux.HandleFunc("GET /api/logs", handleGetLogs)
 	mux.HandleFunc("POST /api/logs/clear", handleClearLogs)
@@ -107,6 +148,16 @@ func startHTTPServer(cfg *Config, sched *Scheduler) *http.Server {
 
 // --- job handlers ---
 
+func fillJobResult(j *Job) {
+	if r, ok := getJobResult(j.ID); ok {
+		j.LastRun = &r.LastRun
+		j.LastDuration = r.LastDuration.Round(time.Millisecond).String()
+		if r.LastExitCode != 0 {
+			j.LastExitCode = &r.LastExitCode
+		}
+	}
+}
+
 func handleGetJobs(sched *Scheduler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		jobs := make([]Job, len(cfg.Jobs))
@@ -116,10 +167,28 @@ func handleGetJobs(sched *Scheduler) http.HandlerFunc {
 					j.Next = &next
 				}
 			}
+			fillJobResult(&j)
 			jobs[i] = j
 		}
 		writeJSON(w, http.StatusOK, jobs)
 	}
+}
+
+func handleRunJob(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "无效的 id")
+		return
+	}
+
+	for _, j := range cfg.Jobs {
+		if j.ID == id {
+			go executeJob(j)
+			writeJSON(w, http.StatusAccepted, map[string]interface{}{"status": "启动", "job": j.Name})
+			return
+		}
+	}
+	writeError(w, http.StatusNotFound, "任务未找到")
 }
 
 func handleCreateJob(w http.ResponseWriter, r *http.Request) {

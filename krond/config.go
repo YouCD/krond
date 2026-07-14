@@ -16,12 +16,15 @@ const (
 )
 
 type Job struct {
-	ID       int        `yaml:"id" json:"id"`
-	Name     string     `yaml:"name" json:"name"`
-	Schedule string     `yaml:"schedule" json:"schedule"`
-	Command  string     `yaml:"command" json:"command"`
-	Enabled  bool       `yaml:"enabled" json:"enabled"`
-	Next     *time.Time `yaml:"-" json:"next,omitempty"`
+	ID           int        `yaml:"id" json:"id"`
+	Name         string     `yaml:"name" json:"name"`
+	Schedule     string     `yaml:"schedule" json:"schedule"`
+	Command      string     `yaml:"command" json:"command"`
+	Enabled      bool       `yaml:"enabled" json:"enabled"`
+	Next         *time.Time `yaml:"-" json:"next,omitempty"`
+	LastRun      *time.Time `yaml:"-" json:"last_run,omitempty"`
+	LastDuration string     `yaml:"-" json:"last_duration,omitempty"`
+	LastExitCode *int       `yaml:"-" json:"last_exit_code,omitempty"`
 }
 
 type Config struct {

@@ -26,6 +26,17 @@ class CronTabRepository(private val client: KrondClient, private val shell: Shel
         }
     }
 
+    fun runJob(id: Int) {
+        Log.d(tag, "runJob: id=$id")
+        try {
+            client.runJob(id)
+            Log.d(tag, "runJob 成功")
+        } catch (e: Exception) {
+            Log.e(tag, "runJob 失败", e)
+            throw IllegalStateException("立即执行失败: ${e.message}")
+        }
+    }
+
     fun setCronJobs(jobs: List<CronJob>) {
         Log.d(tag, "setCronJobs: ${jobs.size} jobs")
         try {

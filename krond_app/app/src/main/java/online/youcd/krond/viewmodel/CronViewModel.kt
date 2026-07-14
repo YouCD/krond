@@ -1,8 +1,9 @@
 package online.youcd.krond.viewmodel
 
+import android.app.Application
 import android.content.ContentResolver
 import android.net.Uri
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import online.youcd.krond.data.CronJob
 import online.youcd.krond.data.CronRepository
@@ -35,15 +36,27 @@ data class CronUiState(
     val showScriptContent: Boolean = false
 )
 
-class CronViewModel : ViewModel() {
+class CronViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = CronRepository()
+    private val appContext = application
 
     private val _state = MutableStateFlow(CronUiState())
     val state = _state.asStateFlow()
 
     init {
         checkRootAndLoad()
+        startAutoCheck()
+    }
+
+    private fun startAutoCheck() {
+        viewModelScope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(5 * 60 * 1000L) // 每 5 分钟刷新任务列表
+                val jobs = withContext(Dispatchers.IO) { repository.getCronJobs() }
+                _state.update { it.copy(jobs = jobs) }
+            }
+        }
     }
 
     private fun checkRootAndLoad() {
@@ -115,6 +128,28 @@ class CronViewModel : ViewModel() {
                 _state.update { it.copy(snackbarMessage = "已保存修改") }
             } catch (e: Exception) {
                 _state.update { it.copy(snackbarMessage = e.message ?: "保存失败") }
+            }
+        }
+    }
+
+    fun runJob(job: CronJob) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { repository.runJob(job.id) }
+                _state.update { it.copy(snackbarMessage = "已触发: ${job.name}") }
+                // 短轮询用于 UI 刷新执行状态（通知由 krond 广播直推）
+                for (i in 0 until 15) {
+                    kotlinx.coroutines.delay(300)
+                    val current = withContext(Dispatchers.IO) { repository.getCronJobs() }
+                    val found = current.find { it.id == job.id }
+                    if (found != null && found.lastRun.isNotBlank() && found.lastRun != job.lastRun) {
+                        break
+                    }
+                }
+                val jobs = withContext(Dispatchers.IO) { repository.getCronJobs() }
+                _state.update { it.copy(jobs = jobs) }
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = "执行失败: ${e.message}") }
             }
         }
     }
