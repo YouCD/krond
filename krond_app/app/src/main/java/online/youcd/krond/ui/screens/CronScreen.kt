@@ -56,6 +56,7 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var krondMenuExpanded by remember { mutableStateOf(false) }
     var appMenuExpanded by remember { mutableStateOf(false) }
+    var showStopConfirmDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     val importLauncher = rememberLauncherForActivityResult(
@@ -95,7 +96,7 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
             LargeTopAppBar(
                 title = {
                     Column {
-                        Text("Cron Manager")
+                        Text("Krond")
                         val statusColor = if (state.isKrondRunning)
                             Color(0xFF4CAF50)
                         else
@@ -119,9 +120,6 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
                 },
                 scrollBehavior = scrollBehavior,
                 actions = {
-                    IconButton(onClick = { viewModel.selectTab(1) }) {
-                        Icon(Icons.Default.Terminal, contentDescription = "日志")
-                    }
                     AppMenuButton(
                         menuExpanded = appMenuExpanded,
                         onMenuExpandedChange = { appMenuExpanded = it },
@@ -148,7 +146,7 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
                         onMenuExpandedChange = { krondMenuExpanded = it },
                         onStart = { viewModel.startKrond() },
                         onRestart = { viewModel.restartKrond(); krondMenuExpanded = false },
-                        onStop = { viewModel.stopKrond(); krondMenuExpanded = false }
+                        onStop = { showStopConfirmDialog = true; krondMenuExpanded = false }
                     )
                 }
             )
@@ -261,6 +259,27 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
         ScriptContentDialog(
             content = state.selectedScriptContent ?: "",
             onDismiss = { viewModel.hideScriptContent() }
+        )
+    }
+
+    if (showStopConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showStopConfirmDialog = false },
+            title = { Text("停止 krond") },
+            text = { Text("停止 krond 将中断所有定时任务，是否继续？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showStopConfirmDialog = false
+                    viewModel.stopKrond()
+                }) {
+                    Text("停止", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStopConfirmDialog = false }) {
+                    Text("取消")
+                }
+            }
         )
     }
 

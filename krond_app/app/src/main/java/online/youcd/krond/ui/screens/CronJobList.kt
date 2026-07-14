@@ -16,6 +16,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import online.youcd.krond.data.CronJob
 
+private val EnabledGreen = Color(0xFF4CAF50)
+private val DisabledOrange = Color(0xFFFF9800)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CronJobList(
@@ -47,7 +50,7 @@ fun CronJobList(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         if (enabledJobs.isNotEmpty()) {
-            stickyHeader { SectionHeader("已开启", enabledJobs.size, Color(0xFF4CAF50)) }
+            stickyHeader { SectionHeader("已开启", enabledJobs.size, EnabledGreen) }
             items(enabledJobs, key = { "enabled_${it.id}" }) { job ->
                 CronJobCard(
                     job = job,
@@ -59,7 +62,7 @@ fun CronJobList(
             }
         }
         if (disabledJobs.isNotEmpty()) {
-            stickyHeader { SectionHeader("未开启", disabledJobs.size, Color(0xFFF44336)) }
+            stickyHeader { SectionHeader("未开启", disabledJobs.size, DisabledOrange) }
             items(disabledJobs, key = { "disabled_${it.id}" }) { job ->
                 CronJobCard(
                     job = job,

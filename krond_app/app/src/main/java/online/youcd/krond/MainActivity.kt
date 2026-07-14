@@ -15,9 +15,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
@@ -53,20 +58,53 @@ class MainActivity : ComponentActivity() {
                             NavigationBarItem(
                                 selected = state.selectedTab == 0,
                                 onClick = { viewModel.selectTab(0) },
-                                icon = { Icon(Icons.Default.Schedule, contentDescription = null) },
-                                label = { Text("任务") }
+                                icon = {
+                                    Icon(
+                                        if (state.selectedTab == 0) Icons.Filled.Schedule else Icons.Outlined.Schedule,
+                                        contentDescription = "任务"
+                                    )
+                                },
+                                label = { Text("任务") },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             )
                             NavigationBarItem(
                                 selected = state.selectedTab == 1,
                                 onClick = { viewModel.selectTab(1) },
-                                icon = { Icon(Icons.Default.Terminal, contentDescription = null) },
-                                label = { Text("日志") }
+                                icon = {
+                                    Icon(
+                                        if (state.selectedTab == 1) Icons.Filled.Terminal else Icons.Outlined.Terminal,
+                                        contentDescription = "日志"
+                                    )
+                                },
+                                label = { Text("日志") },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             )
                             NavigationBarItem(
                                 selected = state.selectedTab == 2,
                                 onClick = { viewModel.selectTab(2) },
-                                icon = { Icon(Icons.Default.BarChart, contentDescription = null) },
-                                label = { Text("统计") }
+                                icon = {
+                                    Icon(
+                                        if (state.selectedTab == 2) Icons.Filled.BarChart else Icons.Outlined.BarChart,
+                                        contentDescription = "统计"
+                                    )
+                                },
+                                label = { Text("统计") },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             )
                         }
                     }
