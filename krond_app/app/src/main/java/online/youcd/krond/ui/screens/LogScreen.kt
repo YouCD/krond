@@ -49,7 +49,6 @@ fun LogScreen(
     isLoading: Boolean,
     currentLogTarget: String,
     onBack: () -> Unit,
-    onRefresh: () -> Unit,
     onClear: () -> Unit,
     onLogTargetChange: (String) -> Unit
 ) {
@@ -102,9 +101,6 @@ fun LogScreen(
                     }
                     IconButton(onClick = onClear) {
                         Icon(Icons.Default.Delete, contentDescription = "清空")
-                    }
-                    IconButton(onClick = onRefresh) {
-                        Icon(Icons.Default.Refresh, contentDescription = "刷新")
                     }
                 }
             )

@@ -26,7 +26,6 @@ class MainActivity : ComponentActivity() {
                         isLoading = state.isLoadingLogs,
                         currentLogTarget = state.currentLogTarget,
                         onBack = { viewModel.closeLogs() },
-                        onRefresh = { viewModel.refreshLogs() },
                         onClear = { viewModel.clearLogs() },
                         onLogTargetChange = { viewModel.setLogTarget(it) }
                     )

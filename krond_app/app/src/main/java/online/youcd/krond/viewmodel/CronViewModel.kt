@@ -63,9 +63,16 @@ class CronViewModel : ViewModel() {
     fun refresh() {
         _state.update { it.copy(isRefreshing = true) }
         viewModelScope.launch {
-            val jobs = withContext(Dispatchers.IO) { repository.getCronJobs() }
-            val running = withContext(Dispatchers.IO) { repository.isKrondRunning() }
-            _state.update { it.copy(jobs = jobs, isKrondRunning = running, isRefreshing = false) }
+            val start = System.currentTimeMillis()
+            try {
+                val jobs = withContext(Dispatchers.IO) { repository.getCronJobs() }
+                val running = withContext(Dispatchers.IO) { repository.isKrondRunning() }
+                _state.update { it.copy(jobs = jobs, isKrondRunning = running) }
+            } finally {
+                val elapsed = System.currentTimeMillis() - start
+                if (elapsed < 500) kotlinx.coroutines.delay(500 - elapsed)
+                _state.update { it.copy(isRefreshing = false) }
+            }
         }
     }
 
