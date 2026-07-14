@@ -39,6 +39,7 @@ captures/
 # Keystore files
 *.jks
 *.keystore
+!app/keystore/debug.keystore
 
 # OS-specific
 .DS_Store

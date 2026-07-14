@@ -32,7 +32,7 @@ APK_SRC=$MODDIR/KrondInjector.apk
 if [ -f "$APK_SRC" ]; then
     cp "$APK_SRC" /data/local/tmp/KrondInjector.apk 2>/dev/null
     chmod 644 /data/local/tmp/KrondInjector.apk
-    su -c "pm install -r /data/local/tmp/KrondInjector.apk" >/dev/null 2>&1
+    su -c "pm install -r -d /data/local/tmp/KrondInjector.apk" >/dev/null 2>&1
     rm -f /data/local/tmp/KrondInjector.apk
 fi
 

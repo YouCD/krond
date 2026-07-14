@@ -20,37 +20,26 @@ android {
     }
 
     signingConfigs {
-        create("release") {
-            val storeFileEnv = System.getenv("KEYSTORE_FILE")
-            val storePasswordEnv = System.getenv("KEYSTORE_PASSWORD")
-            val keyAliasEnv = System.getenv("KEY_ALIAS")
-            val keyPasswordEnv = System.getenv("KEY_PASSWORD")
-            if (!storeFileEnv.isNullOrBlank() && !storePasswordEnv.isNullOrBlank() &&
-                !keyAliasEnv.isNullOrBlank() && !keyPasswordEnv.isNullOrBlank()
-            ) {
-                storeFile = file(storeFileEnv)
-                storePassword = storePasswordEnv
-                keyAlias = keyAliasEnv
-                keyPassword = keyPasswordEnv
-            } else {
-                val debugStore = File(System.getProperty("user.home"), ".android/debug.keystore")
-                if (debugStore.exists()) {
-                    storeFile = debugStore
-                    storePassword = "android"
-                    keyAlias = "androiddebugkey"
-                    keyPassword = "android"
-                }
-            }
+        create("krond") {
+            storeFile = file("keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "krond_debug"
+            keyPassword = "android"
         }
     }
 
     buildTypes {
         debug {
+            signingConfig = signingConfigs.getByName("krond")
             isMinifyEnabled = false
         }
         release {
-            isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("krond")
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 

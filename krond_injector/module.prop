@@ -1,11 +1,11 @@
 id=krond_injector
 name=Krond Injector
-version=0.1.2-1-g8e506f4
-versionCode=6
+version=0.1.4-2-g21c657e
+versionCode=11
 author=YouCD
 description=基于 Go 自研 krond 守护进程的定时任务管理模块，支持抽象 Unix socket 通信、YAML 配置、运行时日志目标切换
 minApiVersion=35
 kernelSU=true
 minKernelSUVersion=10672
 support=https://github.com/YouCD/krond
-updateJson=https://raw.githubusercontent.com/YouCD/krond/refs/heads/master/update.json
+updateJson=https://raw.githubusercontent.com/YouCD/krond/master/update.json

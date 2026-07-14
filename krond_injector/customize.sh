@@ -20,6 +20,16 @@ if [ -f "$MODPATH/scripts/databackup_cron.sh" ] && [ ! -f /data/krond/scripts/da
     chmod 755 /data/krond/scripts/databackup_cron.sh
 fi
 
+# 安装管理 App
+APK_SRC=$MODPATH/KrondInjector.apk
+if [ -f "$APK_SRC" ]; then
+    cp "$APK_SRC" /data/local/tmp/KrondInjector.apk 2>/dev/null
+    chmod 644 /data/local/tmp/KrondInjector.apk
+    pm install -r -d /data/local/tmp/KrondInjector.apk 2>/dev/null || \
+    su -c "pm install -r -d /data/local/tmp/KrondInjector.apk" 2>/dev/null || true
+    rm -f /data/local/tmp/KrondInjector.apk
+fi
+
 ui_print "- krond 模块安装完成"
 ui_print "- krond 守护进程基于 Go，监听 @krond 抽象 Unix socket"
 ui_print "- 配置目录: /data/krond"
