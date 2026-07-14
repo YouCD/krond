@@ -1,0 +1,5 @@
+# SELinux rules for krond abstract Unix socket (@krond)
+# 允许 App (untrusted_app) 连接 krond (su domain) 的 unix_stream_socket
+# 若 App 无法连接，请检查: ps -Z | grep krond 确认 krond 的 domain，替换下面的 "su"
+# 示例: 若 domain 为 u:r:kernel:s0 则改为 allow untrusted_app kernel:unix_stream_socket connectto;
+allow untrusted_app su:unix_stream_socket connectto;

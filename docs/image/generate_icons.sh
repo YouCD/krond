@@ -17,7 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SRC="$SCRIPT_DIR/icon_circle.svg"
 TMP="$(mktemp --suffix=.png)"
-OUT="$REPO_ROOT/cron_app/app/src/main/res/drawable/ic_launcher_foreground.png"
+OUT="$REPO_ROOT/krond_app/app/src/main/res/drawable/ic_launcher_foreground.png"
 
 if ! command -v rsvg-convert >/dev/null; then
   echo "缺少 rsvg-convert (librsvg)，请先安装" >&2
@@ -35,4 +35,4 @@ echo "缩进安全区 -> $OUT"
 magick "$TMP" -resize 285x285 -background none -gravity center -extent 432x432 "$OUT"
 
 rm -f "$TMP"
-echo "完成。背景层(绿色)为 cron_app/app/src/main/res/drawable/ic_launcher_background.xml"
+echo "完成。背景层(绿色)为 krond_app/app/src/main/res/drawable/ic_launcher_background.xml"

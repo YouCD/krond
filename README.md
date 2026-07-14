@@ -1,21 +1,120 @@
-# Crond Injector — Magisk/KernelSU 模块
+# Krond Injector — Magisk/KernelSU 模块
 
 <p align="center">
-  <img src="docs/image/icon_circle.png" alt="Crond Injector 图标" width="120"/>
+  <img src="docs/image/icon_circle.png" alt="Krond Injector 图标" width="120"/>
 </p>
 
-基于 [dcron](https://github.com/dubiousjim/dcron) (Dillon's lightweight cron daemon) 的 Android crond 服务模块。
+基于 Go 自研守护进程 **`krond`** 的 Android 定时任务后端，完全替代 dcron。App 通过 **抽象 Unix socket (`@krond`)** 与 krond 通信（junixsocket + OkHttp），无需 root 即可管理任务。
 
 ---
 
 ## 目录
 
-- [编译指南](#编译指南)
+- [架构](#架构)
 - [模块结构](#模块结构)
+- [编译指南](#编译指南)
 - [安装方法](#安装方法)
 - [用法](#用法)
-- [App 集成](#app-集成)
+- [日志管理](#日志管理)
+- [开发调试](#开发调试)
 - [常见问题](#常见问题)
+
+---
+
+## 架构
+
+```
+┌─────────────────────────┐         @krond (AF_UNIX 抽象命名空间)
+│  App (online.youcd.krond)│  HTTP    ┌──────────────────────────┐
+│  OkHttp + junixsocket   │ ───────► │  krond daemon (root)     │
+│  - 任务增删改查          │ ◄─────── │  - HTTP server @krond     │
+│  - 启停(经 su 调子命令)  │  socket  │  - robfig/cron 调度       │
+│  - 日志/配置查看设置     │          │  - 执行命令(root)         │
+└─────────────────────────┘          └───────────┬──────────────┘
+                                                 │ exec /system/bin/sh -c
+                                                 ▼
+                                        Swift Backup / 任意 shell 命令
+                                        krond 日志 → krond.log + logcat
+```
+
+**关键设计决策**：
+
+| 项 | 方案 |
+|----|------|
+| 后端 | Go 守护进程 krond，调度库 `robfig/cron/v3` |
+| 通信 | 抽象命名空间 Unix socket `@krond` |
+| App 端 | junixsocket (`AFUNIXSocketAddress.inAbstractNamespace` + `AFSocketFactory.fixedAddressSocketFactory` 注入 OkHttp) |
+| 鉴权 | SELinux 隔离（`sepolicy.rule` 限制 App 域 `connectto`） |
+| 启停 | App 经 `su -c krond start\|stop\|restart`；任务读写/状态/日志走 socket |
+| 配置 | YAML（`/data/krond/krond.yaml`，含 `jobs` 数组，变更即落盘） |
+| 日志 | 支持运行时切换：仅文件 / 仅 logcat / 双写 |
+
+---
+
+## 模块结构
+
+```
+krond_injector/
+├── krond                          # Go 编译产物（arm64 静态二进制）
+├── krond.yaml                     # 默认配置（首启复制到 /data/krond）
+├── KrondInjector.apk              # 管理 App（由 service.sh 开机后 pm install）
+├── module.prop                    # 模块元信息
+├── customize.sh                   # 安装时：设权限、建目录、复制默认配置
+├── service.sh                     # 启动时：等待 boot → pm install → logwrapper krond run
+├── uninstall.sh                   # 卸载时：停止 krond、清理 /data/krond、延迟卸载 App
+├── sepolicy.rule                  # SELinux 规则（允许 App 连接 @krond）
+├── scripts/
+│   └── databackup_cron.sh         # Swift Backup 封装脚本（示例 job）
+└── META-INF/com/google/android/
+    └── updater-script
+```
+
+### 关键文件说明
+
+#### `krond` — Go 守护进程
+
+子命令：
+
+| 命令 | 说明 |
+|------|------|
+| `krond run` | 前台运行（供 service.sh 使用） |
+| `krond start` | 后台启动（Setsid 脱离终端 + 写 pidfile） |
+| `krond stop` | 停止（SIGTERM → 3s 超时 SIGKILL） |
+| `krond restart` | restart |
+| `krond version` | 版本号 |
+
+#### `krond.yaml` — 默认配置
+
+```yaml
+socket: "@krond"
+log_file: "/data/krond/krond.log"
+pid_file: "/data/krond/krond.pid"
+log_target: "both"      # file | logcat | both
+jobs:
+  - id: 1
+    name: "Swift Backup"
+    schedule: "0 3 * * *"
+    command: "/data/krond/scripts/databackup_cron.sh"
+    enabled: true
+```
+
+通过 App 日志页的设置下拉可运行时切换 `log_target`，无需重启 krond。
+
+#### `service.sh` — 开机自启流程
+
+1. 等待 `sys.boot_completed=1`
+2. 确保 `/data/krond` 目录存在，复制默认配置/脚本
+3. `pm install` 管理 App（若 APK 存在）
+4. 停止旧 krond
+5. 优先 `logwrapper krond run`（stdout → logcat）；若无 logwrapper 则降级为 `nohup`
+
+#### `sepolicy.rule` — SELinux 规则
+
+```
+allow untrusted_app su:unix_stream_socket connectto;
+```
+
+若 App 无法连接 `@krond`，用 `ps -Z | grep krond` 确认 krond 的 domain，替换规则中的 `su`。
 
 ---
 
@@ -23,182 +122,72 @@
 
 ### 前置条件
 
-- Android NDK（本文使用 r28c）
-- 目标架构：ARM64 (aarch64)
+- Go 1.26+（交叉编译 krond）
+- Android SDK + JDK 21（编译 App）
 
-### 编译 crond
-
-```bash
-# 1. 克隆 dcron 源码
-git clone https://github.com/dubiousjim/dcron.git
-cd dcron
-
-# 2. 设置 NDK 工具链
-export NDK=/path/to/your/android-ndk
-export CC=$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android35-clang
-
-# 3. 编译（硬编码路径到二进制中）
-make CC="$CC" \
-     CFLAGS="-static -O2 -fPIE -Wall" \
-     LDFLAGS="-static -fPIE" \
-     SCRONTABS="/data/cron/system" \
-     CRONTABS="/data/cron/crontabs" \
-     CRONSTAMPS="/data/cron/stamps" \
-     LOG_IDENT="CrondInjector" \
-     TIMESTAMP_FMT="%Y-%m-%d %H:%M:%S"
-```
-
-> **为什么不用 configure？** dcron 不依赖 autotools，路径通过 Makefile 的 `-D` 编译标志传入，编译时就决定了 crontab 目录、日志标识等。
->
-> **日志时间格式**：日志头的时间戳由 `TIMESTAMP_FMT` 控制（`defs.h` 中默认 `%b %e %H:%M:%S`，即 syslog 风格 `Jul 13 15:07:01`）。本模块用 `TIMESTAMP_FMT="%Y-%m-%d %H:%M:%S"` 编译为 ISO 8601 格式（`2026-07-13 15:07:01`），更易读、更适合程序解析。注意 `TIMESTAMP_FMT` 只影响**日志头**，不影响 crontab 时间戳文件（后者由 `CRONSTAMP_FMT` 固定为 `%Y-%m-%d %H:%M`）。如果只改 `defs.h` 不生效，是因为 Makefile 第 14 行有同名变量、第 39 行通过 `-D` 强制注入，必须在 `make` 命令行覆盖。
-
-### 编译 crontab 命令
-
-在同一个源码目录：
+### 一键编译（模块 zip）
 
 ```bash
-# 清除之前的编译产物
-rm -f crontab.o crontab
-
-# 编译，crontab 已 patch 为自动搜索 $PATH（见下文「源码修改」）
-make CC="$CC" \
-     CFLAGS="-static -O2 -fPIE -Wall" \
-     LDFLAGS="-static -fPIE" \
-     SCRONTABS="/data/cron/system" \
-     CRONTABS="/data/cron/crontabs" \
-     CRONSTAMPS="/data/cron/stamps" \
-     LOG_IDENT="CrondInjector" \
-     crontab
+bash build-module.sh
 ```
 
-### 裁剪体积
+生成 `krond_injector.zip`，包含 krond 二进制 + 默认配置 + App APK + 模块脚本。
+
+### 分步编译
+
+#### 编译 krond
 
 ```bash
-$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip crond
-$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip crontab
+cd krond
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o ../krond_injector/krond .
 ```
 
-strip 后体积约 500KB + 440KB。
-
-### 环境变量说明
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `SCRONTABS` | `/etc/cron.d` | 系统 crontab 目录（本模块设为 `/data/cron/system`）|
-| `CRONTABS` | `/var/spool/cron/crontabs` | 用户 crontab 目录（本模块设为 `/data/cron/crontabs`）|
-| `CRONSTAMPS` | `/var/spool/cron/cronstamps` | 时间戳目录（本模块设为 `/data/cron/stamps`）|
-| `LOG_IDENT` | `crond` | 日志标识（本模块设为 `CrondInjector`，同时用于日志头）|
-| `TIMESTAMP_FMT` | `%b %e %H:%M:%S` | 日志时间戳格式（本模块改为 `%Y-%m-%d %H:%M:%S`）|
-| `PATH_VI` | `/usr/bin/vi` | 默认编辑器路径（crontab.c 已 patch 为搜索 `$PATH`，见「源码修改」）|
-
----
-
-## 模块结构
-
-```
-crond_injector/
-├── module.prop                      # ❗修改 id 和 version 以适应你的版本
-├── META-INF/com/google/android/     # Magisk 安装器（兼容 KernelSU）
-│   ├── update-binary
-│   └── updater-script
-├── CrondInjector.apk                # 管理 App，刷入后由 service.sh 在开机后通过 pm install 安装为普通应用
-├── system/
-│   └── bin/
-│       └── crontab                  # ❗用编译产物替换
-├── customize.sh                     # 安装时执行：创建目录、设权限、复制文件
-├── service.sh                       # 启动时执行：等待 boot_completed → 启动 dcron
-├── uninstall.sh                     # 卸载时停止服务 + 清理 /data/cron
-└── crond/
-    ├── bin/
-    │   ├── crond                    # ❗用编译产物替换
-    │   └── crontab                  # ❗用编译产物替换（也可删除）
-    └── crontabs/
-        └── root                     # 默认 crontab（首行必须是 # 注释或空行）
-```
-
-### 关键文件说明
-
-#### `service.sh` — dcron 自启动
+#### 编译 App
 
 ```bash
-#!/system/bin/sh
-MODDIR=${0%/*}
-CROND_BIN=$MODDIR/crond/bin/crond
-
-# 等待系统就绪
-while [ "$(getprop sys.boot_completed)" != "1" ]; do
-    sleep 2
-done
-
-# 创建运行时目录（必须与编译时路径一致）
-for dir in /data/cron/crontabs /data/cron/system /data/cron/stamps; do
-    [ -d "$dir" ] || mkdir -p "$dir" 2>/dev/null
-done
-
-# 复制默认 crontab
-[ -f "$MODDIR/crond/crontabs/root" ] && [ ! -f /data/cron/crontabs/root ] && \
-    cp "$MODDIR/crond/crontabs/root" /data/cron/crontabs/root
-
-# 启动（-b 后台；日志写入文件而非 syslog，App 直接读取）
-$CROND_BIN -b -L /data/cron/crond.log -l info
+cd krond_app
+./gradlew assembleDebug
+cp app/build/outputs/apk/debug/app-debug.apk ../krond_injector/KrondInjector.apk
 ```
-
-> 注意：`/data/cron/*` 路径必须与编译时 `CRONTABS` 等标志一致，否则 dcron 找不到 crontab 文件。dcron 的 `-S` 选项走 syslog，而 Android 没有 syslog 守护进程，日志会丢失；因此改用 `-L file` 把日志写到 `/data/cron/crond.log`，App 的"执行日志"功能读取该文件。`-l info` 让 dcron 记录每条任务的执行情况。
-
-#### `customize.sh` — 安装时初始化
-
-安装时创建目录、设置权限。`system/bin/` 下的文件会由 Magisk/KernelSU 自动挂载到 `/system/bin/`。
 
 ---
 
 ## 安装方法
 
-### 方法一：直接刷入 zip
+### 刷入 zip
 
 ```bash
-cd crond_injector
-zip -r ../crond_injector.zip .
-# 推送并刷入
-adb push ../crond_injector.zip /sdcard/
-# 在 Magisk Manager / KernelSU Manager 中刷入
+adb push krond_injector.zip /sdcard/
+# 在 KernelSU Manager 中刷入
 ```
 
-> 刷入后，`CrondInjector.apk` 会由 `service.sh` 在开机完成（`sys.boot_completed=1`）后通过 `pm install -r` **自动安装**为普通应用，无需手动 `adb install`（首次需在该 Manager 中授予 App root 权限）。这样可避开系统应用 overlay 在本 ROM 上资源加载崩溃的问题。**注意**：`uninstall.sh` 在启动早期执行时 PackageManager 尚未就绪，无法当场 `pm uninstall`；因此卸载模块时会派发一个延迟脚本，待开机完成后再自动卸载 App。
+刷入后 krond 在开机时自动启动，管理 App 由 `service.sh` 在开机完成后自动 `pm install`（首次需在 KernelSU Manager 中授予 App root 权限）。
 
-### 方法二：手动部署（开发调试用）
+### 手动部署（调试用）
 
 ```bash
-adb root  # 或 adb shell && su
+# 1. 推送 krond 二进制与模块文件
+adb push krond_injector/krond    /data/adb/modules/krond_injector/krond
+adb push krond_injector/service.sh /data/adb/modules/krond_injector/
+adb push krond_injector/customize.sh /data/adb/modules/krond_injector/
+adb push krond_injector/module.prop /data/adb/modules/krond_injector/
+adb push krond_injector/krond.yaml /data/adb/modules/krond_injector/
+adb push krond_injector/scripts/databackup_cron.sh /data/adb/modules/krond_injector/scripts/
 
-# 1. 停止旧服务
-adb shell killall crond 2>/dev/null
+# 2. 设权限
+adb shell chmod 755 /data/adb/modules/krond_injector/krond
+adb shell chmod 755 /data/adb/modules/krond_injector/service.sh
 
-# 2. 推送模块文件
-adb push crond/bin/crond    /data/adb/modules/crond_injector/crond/bin/crond
-adb push system/bin/crontab /data/adb/modules/crond_injector/system/bin/crontab
-adb push service.sh         /data/adb/modules/crond_injector/
-adb push module.prop        /data/adb/modules/crond_injector/
-adb push CrondInjector.apk  /data/adb/modules/crond_injector/CrondInjector.apk
-# ... 其他文件
+# 3. 创建数据目录
+adb shell mkdir -p /data/krond
 
-# 3. 设权限
-adb shell chmod 755 /data/adb/modules/crond_injector/crond/bin/crond
-adb shell chmod 755 /data/adb/modules/crond_injector/service.sh
+# 4. 启动
+adb shell /data/adb/modules/krond_injector/krond start
 
-# 4. 创建数据目录
-adb shell mkdir -p /data/cron/{crontabs,system,stamps,tmp}
-adb shell cp /data/adb/modules/crond_injector/crond/crontabs/root \
-             /data/cron/crontabs/root
-
-# 5. 启动
-adb shell /data/adb/modules/crond_injector/crond/bin/crond -b -L /data/cron/crond.log -l info
-
-# 6. 验证
-adb shell pidof crond
-adb shell logcat -s CrondInjector
+# 5. 验证
+adb shell pidof krond
+adb shell ss -x | grep krond
 ```
-
-> 手动部署时 App 会在下次开机由 `service.sh` 自动 `pm install`；也可直接 `adb install CrondInjector.apk` 立即安装。
 
 ---
 
@@ -206,243 +195,131 @@ adb shell logcat -s CrondInjector
 
 ### 管理定时任务
 
-```bash
-# 列出任务
-crontab -l
+通过管理 App（Krond Injector）完成所有操作：
 
-# 编辑任务（会调用 /system/bin/vi）
-crontab -e
+- **列表**：App 主页显示所有任务
+- **新增/编辑**：表单输入调度表达式 + 命令
+- **启停**：Switch 开关；长按卡片弹出编辑/删除
+- **导入/导出**：JSON 文件
 
-# 从标准输入安装
-echo "0 6 * * * /system/bin/log -t mytag hello" | crontab -
+### Swift Backup 自动备份
 
-# 删除 crontab
-crontab -r
-```
+模块内置示例 job（`krond.yaml` 中已配置），每天凌晨 3 点调用 `databackup_cron.sh` 触发 Swift Backup 的全部已启用计划。App 内即可编辑/停用此 job。
 
-### 查看 dcron 日志
-
-dcron 的日志写入 `/data/cron/crond.log`（由 `service.sh` 中的 `-L` 指定），每条任务执行都会记录一行：
+脚本单独调用：
 
 ```bash
-cat /data/cron/crond.log
-# 示例输出：
-# 2026-07-13 15:07:01 localhost CrondInjector: FILE /data/cron/crontabs/root USER root PID 17360 echo ok >> /data/cron/test.log
+# 触发所有计划
+/data/krond/scripts/databackup_cron.sh
+
+# 触发指定计划（schedule_id 在 Swift Backup 中长按复制）
+/data/krond/scripts/databackup_cron.sh schedule_id1 schedule_id2
 ```
-
-App 内的"执行日志"（工具栏终端图标）读取的也是这个文件。
-
-### 手动重载 crontab
-
-dcron 在启动时一次性缓存所有 crontab，之后不监测文件变化。修改 crontab 后需要通过 `cron.update` 信号文件通知 crond 重新读取：
-
-```bash
-# 方式一：使用 crontab 命令（会自动创建 cron.update）
-crontab /data/cron/crontabs/root
-
-# 方式二：直接 touch 信号文件
-touch /data/cron/crontabs/cron.update
-```
-
-dcron 每 60 秒检查一次 `cron.update`，检测到后立即删除该文件并重新加载对应用户的 crontab。
 
 ---
 
-## App 集成
+## 日志管理
 
-Android App 通过 KernelSU 的 `su -c` 调用 crontab 命令。**KernelSU 的 `su` 不会通过 shell 解析参数** — 它把 `argv[2]` 当作可执行文件、`argv[3:]` 当作其参数。因此不能传 `"su -c 'crontab -l'"` 这种 shell 风格，需拆成独立参数：
+krond 支持三种日志目标，通过 App 日志页的齿轮菜单或直接调 API 运行时切换：
 
-```kotlin
-// Kotlin — 写入 crontab，直接使用模块内的 crontab binary
-fun installCronTab(content: String) {
-    val crontabBin = "/data/adb/modules/crond_injector/crond/bin/crontab"
-    val process = Runtime.getRuntime().exec(arrayOf(
-        "su", "-c", crontabBin, "-"
-    ))
-    process.outputStream.write(content.toByteArray())
-    process.outputStream.close()
-    process.waitFor()
-}
+| 模式 | 说明 |
+|------|------|
+| 仅文件 | 写入 `/data/krond/krond.log`，App 经 socket 读取 |
+| 仅 Logcat | 写入 `adb logcat -s krond`（`logwrapper` 转发 stdout） |
+| 双写 | 同时写入文件和 logcat（默认） |
 
-// 读取 crontab
-fun getCronTab(): String {
-    val crontabBin = "/data/adb/modules/crond_injector/crond/bin/crontab"
-    val process = Runtime.getRuntime().exec(arrayOf(
-        "su", "-c", crontabBin, "-l"
-    ))
-    return process.inputStream.bufferedReader().readText()
-}
+App 日志页仅显示文件日志（krond.log），不受 `log_target` 设置影响。
+
+### 查看日志
+
+```bash
+# 文件日志
+adb shell tail -f /data/krond/krond.log
+
+# logcat（需 log_target=logcat 或 both）
+adb logcat -s krond
 ```
-
-> ⚠️ **KernelSU `su` 参数规则**：`Runtime.getRuntime().exec(arrayOf("su", "-c", "cat", "/path/file"))` 会执行 `cat /path/file`；而 `exec(arrayOf("su", "-c", "cat /path/file"))` 会尝试把 `"cat /path/file"` 整体当作可执行文件，导致失败。同理 `dd` 的 `of=` 参数也必须独立：`exec(arrayOf("su", "-c", "dd", "of=/data/cron/crontabs/root"))`。
->
-> ⚠️ **使用模块内部路径而非系统 overlay**：KernelSU 的 hybrid mount 在模块激活时拍下 `system/` 的快照，刷入后推送新文件不会更新 overlay。因此始终使用模块内的 `crond/bin/crontab`，避免 `/system/bin/crontab` 还是旧版。
->
-> `crontab -` 会替换整个 crontab。如需追加任务，先 `crontab -l` 读取，拼接后一次性写入。
 
 ---
 
----
+## 开发调试
 
-## 与 DataBackup / speed-backup 集成
-
-[DataBackup](https://github.com/XayahSuSuSu/Android-DataBackup) 是基于 [speed-backup](https://github.com/YAWAsau/backup_script) shell 脚本的图形化备份工具。
-speed-backup 本身是纯 shell 脚本，可以直接被 crond 定时调用，实现无人值守自动备份。
-
-### 安装 speed-backup
+### 常用调试命令
 
 ```bash
-# 1. 从 GitHub Release 下载
-cd /data/cron
-wget https://github.com/YAWAsau/backup_script/releases/latest/download/backup_script.zip
-unzip backup_script.zip -d speed-backup
+# 检查 krond 是否运行
+adb shell pidof krond
 
-# 2. 首次运行生成 appList.txt（交互式，只需一次）
-cd speed-backup
-sh start.sh
-# 选择「生成应用列表」→ 稍等 → 编辑 appList.txt，
-# 用 # 注释掉不想自动备份的 app
+# 检查抽象 socket
+adb shell cat /proc/net/unix | grep krond
 
-# 3. 设置后台模式
-sed -i 's/^background_execution=.*/background_execution=1/' backup_settings.conf
+# 查看 krond 日志
+adb shell tail -f /data/krond/krond.log
+
+# SELinux 调试（A/B 测试）
+adb shell su -c "setenforce 0"   # 临时关闭（调试用）
+adb logcat | grep avc             # 看 SELinux 拒绝
+
+# 手动启停
+adb shell su -c "/data/adb/modules/krond_injector/krond restart"
 ```
 
-### 配置 crond 定时备份
-
-模块已提供封装脚本 `scripts/databackup_cron.sh`：
+### 测试后清理
 
 ```bash
-# 将脚本复制到模块目录（推送后直接可用）
-cp /data/adb/modules/crond_injector/scripts/databackup_cron.sh /data/cron/scripts/
-chmod +x /data/cron/scripts/databackup_cron.sh
+# 停止 krond
+adb shell su -c "/data/adb/modules/krond_injector/krond stop"
 
-# 添加到 crontab，每天凌晨 3 点执行
-echo "0 3 * * * /data/cron/scripts/databackup_cron.sh" | crontab -
+# 清理数据
+adb shell rm -rf /data/krond
 ```
-
-脚本功能：
-- 检查 speed-backup 是否安装
-- 检查 appList.txt 是否存在
-- 自动设 `background_execution=1`
-- 调用 start.sh 的非交互备份模式
-- 日志写入 `/data/cron/databackup.log`
-
-### 自定义备份频率
-
-```bash
-# 编辑 crontab
-crontab -e
-
-# 示例：每周日凌晨 4 点
-0 4 * * 0 /data/cron/scripts/databackup_cron.sh
-
-# 示例：每晚 23 点
-0 23 * * * /data/cron/scripts/databackup_cron.sh
-```
-
-> speed-backup 会增量备份（版本号/数据大小/权限/SSAID 多维度比对），无变化自动跳过，不会每次都全量跑。
 
 ---
 
 ## 常见问题
 
-### Q: crond 启动后立刻崩溃？
+### Q: App 显示 "krond 未运行"
 
-A: 确认 `/data/cron/` 目录存在且权限正确。运行 `logcat -s CrondInjector` 查看错误日志。如果是 SIGSEGV，说明编译的二进制与设备不兼容（如架构不对，或缺少某些内核特性）。
+A: 排查顺序：
+1. `adb shell pidof krond` — 进程是否存在
+2. `adb shell cat /proc/net/unix | grep krond` — socket 是否存在
+3. `adb logcat | grep avc` — SELinux 是否阻止了 connectto
+4. 检查 `/data/krond/krond.log` 中 krond 启动日志
 
-### Q: crontab -e 报错 `/usr/bin/vi: not found`
+### Q: krond 启动失败
 
-A: 本模块的 `crontab` 已 patch 为按 `$PATH` 顺序搜索 `vi` → `vim` → `nano` → `editor`，都不存在才 fallback 到 `/usr/bin/vi`。如仍报错，说明这些编辑器均不在 PATH 中。也可通过 `EDITOR` 或 `VISUAL` 环境变量指定：
+A: 检查：
+- `logwrapper` 是否可用（`command -v logwrapper`）；若无，service.sh 会自动降级
+- `/data/krond/krond.yaml` 是否存在且格式正确
+- 二进制架构是否匹配：`file /data/adb/modules/krond_injector/krond` 应为 `ARM aarch64`
 
-```bash
-EDITOR=/system/bin/nano crontab -e
-```
+### Q: Swift Backup 不执行
 
-### Q: 添加任务后不执行？
+A: 检查 `databackup_cron.sh` 日志 `/data/krond/databackup.log`。若 `am start` 退出码非零，参考 `am start` 的 stdout/stderr。Swift Backup 需正确安装且至少有一个已启用计划。
 
-A: dcron 不会立即扫描 crontab。它有 60 秒的轮询间隔。可以 touch 更新信号文件强制触发：
+### Q: 如何卸载？
 
-```bash
-touch /data/cron/crontabs/cron.update
-```
-
-### Q: 日志里出现 `unable to exec /usr/sbin/sendmail`？
-
-A: dcron 会在 cron job 产生 stdout/stderr 输出时尝试通过 sendmail 邮寄输出。Android 没有 sendmail，本模块已 patch `job.c` 删除了邮件派送子进程，输出直接丢弃，不会再有此日志。
-
-### Q: 如何卸载模块？
-
-A: 直接刷入 zip 卸载，或在 Manager 中移除模块。`uninstall.sh` 会自动停止 crond 进程并清理 `/data/cron`。
-
----
-
-## 编译&调试工作流
-
-```bash
-# 1. 修改源码/配置
-# 2. 重新编译
-make CC="..." CFLAGS="..." LDFLAGS="..." crond
-
-# 3. strip + 推送
-llvm-strip crond
-adb push crond /data/adb/modules/crond_injector/crond/bin/crond
-
-# 4. 重启服务
-adb shell killall crond
-adb shell /data/adb/modules/crond_injector/crond/bin/crond -b -L /data/cron/crond.log -l debug
-
-# 5. 看日志
-adb shell logcat -s CrondInjector
-```
-
-> 调试时建议加 `-l debug` 参数启动，dcron 会输出每次任务检查和执行的详细信息。
-
----
-
-## dcron 源码修改
-
-本模块对 dcron 4.5 的源码做了以下修改，适配 Android 环境：
-
-### `crontab.c` — `EditFile()` 编辑器搜索支持 `$PATH`
-
-原代码在 `$EDITOR` / `$VISUAL` 均未设置时直接 fallback 到硬编码的 `PATH_VI`（默认 `/usr/bin/vi`），Android 上不存在。修改为：
-
-1. 取 `$PATH` 环境变量，按 `:` 分割遍历每个目录
-2. 依次检查 `vi` → `vim` → `nano` → `editor` 是否有可执行文件
-3. 找到第一个即用作编辑器路径
-4. 全部不存在则 fallback 到 `PATH_VI`
-
-相关代码：`crontab.c:349-373`
-
-### `job.c` — 移除 sendmail 邮件派送
-
-dcron 在每个 cron job 产生输出时会 fork 子进程调用 `/usr/sbin/sendmail` 邮寄输出。Android 不包含 sendmail，导致每次执行都有一条 `unable to exec /usr/sbin/sendmail` 日志。修改为直接关闭 mail 文件描述符返回，不 fork、不 exec、无日志。
-
-相关代码：`job.c:290-378` 整段删除
+A: 在 KernelSU Manager 中移除模块。`uninstall.sh` 会停止 krond、清理 `/data/krond`，并在开机完成后自动卸载管理 App。
 
 ---
 
 ## 参考
 
-- [dcron GitHub](https://github.com/dubiousjim/dcron) — Dillon's lightweight cron daemon
-- [Magisk 模块开发文档](https://topjohnwu.github.io/Magisk/guides.html)
+- [junixsocket](https://kohlschutter.github.io/junixsocket/) — Unix Domain Sockets for Java（Apache 2.0）
+- [OkHttp](https://square.github.io/okhttp/) — HTTP 客户端
+- [robfig/cron](https://github.com/robfig/cron) — Go 定时调度库
 - [KernelSU 模块开发文档](https://kernelsu.org/guide/module.html)
+- [Swift Backup](https://swiftapps.org/) — Android 备份工具
 
 ---
 
 ## 图标生成
 
-App 启动图标为 Android 自适应图标（Adaptive Icon）：背景层 `ic_launcher_background.xml`（纯绿 `#2A9D5C`） + 前景层 `ic_launcher_foreground.png`（绿色圆环 + 深色时钟表盘）。适配 Android 15 / 16（API 35+）。
-
-> 关键点：自适应图标会把超出「安全区(72dp)」的内容裁掉。因此前景层的绿环必须缩进到安全区内，否则桌面看不到绿环。
-
-源文件在 `docs/image/icon_circle.svg`。重新生成前景层：
+App 启动图标为 Android 自适应图标：背景层纯绿 `#2A9D5C` + 前景层绿色圆环深色时钟表盘。
 
 ```bash
 cd docs/image
 ./generate_icons.sh
 ```
-
-脚本会：① 用 `rsvg-convert` 渲染 SVG 为 432×432 PNG；② 用 ImageMagick 把图标整体缩进到安全区（绿圆半径 ≈35.5dp < 36dp），背景绿由 `ic_launcher_background.xml` 兜底。各密度 `mipmap-*` 仍保留作为低版本兜底。
 
 依赖：`librsvg`（`rsvg-convert`）、`ImageMagick 7`（`magick`）。

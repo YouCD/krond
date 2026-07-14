@@ -45,7 +45,10 @@ Thumbs.db
 
 # NDK build output
 .cxx/
-crond_injector.zip
+krond_injector.zip
 
 # 随模块分发的 App 安装包（由 CI/打包脚本生成）
-CrondInjector.apk
+KrondInjector.apk
+
+# krond Go 编译产物（本地测试时生成，CI 中编译）
+krond_injector/krond

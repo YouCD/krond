@@ -1,0 +1,10 @@
+socket: "@krond"
+log_file: "/data/krond/krond.log"
+pid_file: "/data/krond/krond.pid"
+log_target: "file"
+jobs:
+  - id: 1
+    name: "默认任务"
+    schedule: "*/10 * * * *"
+    command: "echo krond"
+    enabled: true

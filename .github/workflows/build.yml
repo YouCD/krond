@@ -1,4 +1,4 @@
-name: Build App & KernelSU Module
+name: Build krond + App & KernelSU Module
 
 on:
   push:
@@ -12,6 +12,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Cross-compile krond (arm64)
+        run: |
+          cd krond
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o ../krond_injector/krond .
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -42,7 +52,6 @@ jobs:
             echo "alias=$KS_ALIAS" >> "$GITHUB_OUTPUT"
             echo "kpass=$KS_KPASS" >> "$GITHUB_OUTPUT"
           else
-            # 无 secret 时生成临时 debug keystore（每次密钥不同，覆盖安装需先卸载）
             mkdir -p ~/.android
             keytool -genkeypair -v -keystore ~/.android/debug.keystore -alias androiddebugkey \
               -keyalg RSA -keysize 2048 -validity 10000 \
@@ -54,7 +63,7 @@ jobs:
           fi
 
       - name: Build release APK & run unit tests
-        working-directory: cron_app
+        working-directory: krond_app
         env:
           KEYSTORE_FILE: ${{ steps.sign.outputs.file }}
           KEYSTORE_PASSWORD: ${{ steps.sign.outputs.pass }}
@@ -64,22 +73,21 @@ jobs:
           chmod +x gradlew
           ./gradlew testDebugUnitTest assembleRelease
 
-      - name: Package KernelSU module (includes app)
+      - name: Package KernelSU module (includes krond + app)
         run: |
-          cd crond_injector
-          # App 作为普通应用随模块分发，由 service.sh 在开机后 pm install，卸载时延迟到开机完成后 pm uninstall
-          cp ../cron_app/app/build/outputs/apk/release/app-release.apk CrondInjector.apk
-          zip -r ../crond_injector.zip .
+          cd krond_injector
+          cp ../krond_app/app/build/outputs/apk/release/app-release.apk KrondInjector.apk
+          zip -r ../krond_injector.zip . -x "*.log"
           cd ..
 
       - name: Upload module zip
         uses: actions/upload-artifact@v4
         with:
-          name: crond_injector
-          path: crond_injector.zip
+          name: krond_injector
+          path: krond_injector.zip
 
       - name: Upload app APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: cron_app/app/build/outputs/apk/release/app-release.apk
+          path: krond_app/app/build/outputs/apk/release/app-release.apk

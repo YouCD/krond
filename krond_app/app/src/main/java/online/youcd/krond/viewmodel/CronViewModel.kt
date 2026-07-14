@@ -1,0 +1,382 @@
+package online.youcd.krond.viewmodel
+
+import android.content.ContentResolver
+import android.net.Uri
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import online.youcd.krond.data.CronJob
+import online.youcd.krond.data.CronRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+data class CronUiState(
+    val jobs: List<CronJob> = emptyList(),
+    val hasRoot: Boolean = false,
+    val isLoading: Boolean = true,
+    val error: String? = null,
+    val showAddDialog: Boolean = false,
+    val editingJob: CronJob? = null,
+    val snackbarMessage: String? = null,
+    val showLogs: Boolean = false,
+    val logs: List<String> = emptyList(),
+    val isLoadingLogs: Boolean = false,
+    val isKrondRunning: Boolean = false,
+    val isRefreshing: Boolean = false,
+    val pendingDeleteJob: CronJob? = null,
+    val currentLogTarget: String = "both",
+    val scripts: List<String> = emptyList(),
+    val showScriptsDialog: Boolean = false
+)
+
+class CronViewModel : ViewModel() {
+
+    private val repository = CronRepository()
+
+    private val _state = MutableStateFlow(CronUiState())
+    val state = _state.asStateFlow()
+
+    init {
+        checkRootAndLoad()
+    }
+
+    private fun checkRootAndLoad() {
+        _state.update { it.copy(isLoading = true) }
+        viewModelScope.launch {
+            val hasRoot = withContext(Dispatchers.IO) { repository.hasRoot() }
+            if (hasRoot) {
+                val jobs = withContext(Dispatchers.IO) { repository.getCronJobs() }
+                val running = withContext(Dispatchers.IO) { repository.isKrondRunning() }
+                _state.update { it.copy(hasRoot = true, jobs = jobs, isKrondRunning = running, isLoading = false) }
+            } else {
+                _state.update { it.copy(hasRoot = false, isLoading = false) }
+            }
+        }
+    }
+
+    fun refresh() {
+        _state.update { it.copy(isRefreshing = true) }
+        viewModelScope.launch {
+            val jobs = withContext(Dispatchers.IO) { repository.getCronJobs() }
+            val running = withContext(Dispatchers.IO) { repository.isKrondRunning() }
+            _state.update { it.copy(jobs = jobs, isKrondRunning = running, isRefreshing = false) }
+        }
+    }
+
+    fun addJob(schedule: String, command: String, name: String = "") {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val current = repository.getCronJobs().toMutableList()
+                    val newId = (current.maxOfOrNull { it.id } ?: 0) + 1
+                    current.add(CronJob(id = newId, name = name, schedule = schedule, command = command, enabled = true))
+                    repository.setCronJobs(current)
+                }
+                refresh()
+                _state.update { it.copy(snackbarMessage = "已添加任务") }
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = e.message ?: "添加失败") }
+            }
+        }
+    }
+
+    fun updateJob(job: CronJob, newSchedule: String, newCommand: String, newName: String) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val current = repository.getCronJobs().toMutableList()
+                    val idx = current.indexOfFirst { it.id == job.id }
+                    if (idx >= 0) {
+                        current[idx] = current[idx].copy(schedule = newSchedule, command = newCommand, name = newName)
+                        repository.setCronJobs(current)
+                    }
+                }
+                refresh()
+                _state.update { it.copy(snackbarMessage = "已保存修改") }
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = e.message ?: "保存失败") }
+            }
+        }
+    }
+
+    fun toggleJob(job: CronJob) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val current = repository.getCronJobs().toMutableList()
+                    val idx = current.indexOfFirst { it.id == job.id }
+                    if (idx >= 0) {
+                        current[idx] = current[idx].copy(enabled = !current[idx].enabled)
+                        repository.setCronJobs(current)
+                    }
+                }
+                refresh()
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = e.message ?: "操作失败") }
+            }
+        }
+    }
+
+    fun requestDeleteJob(job: CronJob) {
+        _state.update { it.copy(pendingDeleteJob = job) }
+    }
+
+    fun cancelDeleteJob() {
+        _state.update { it.copy(pendingDeleteJob = null) }
+    }
+
+    fun confirmDeleteJob() {
+        val job = _state.value.pendingDeleteJob ?: return
+        _state.update { it.copy(pendingDeleteJob = null) }
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val current = repository.getCronJobs().toMutableList()
+                    current.removeAll { it.id == job.id }
+                    repository.setCronJobs(current)
+                }
+                refresh()
+                _state.update { it.copy(snackbarMessage = "已删除任务") }
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = e.message ?: "删除失败") }
+            }
+        }
+    }
+
+    fun showAddDialog() {
+        _state.update { it.copy(showAddDialog = true) }
+    }
+
+    fun hideAddDialog() {
+        _state.update { it.copy(showAddDialog = false) }
+    }
+
+    fun showEditDialog(job: CronJob) {
+        _state.update { it.copy(editingJob = job) }
+    }
+
+    fun hideEditDialog() {
+        _state.update { it.copy(editingJob = null) }
+    }
+
+    fun clearSnackbar() {
+        _state.update { it.copy(snackbarMessage = null) }
+    }
+
+    fun exportToUri(uri: android.net.Uri, contentResolver: android.content.ContentResolver) {
+        viewModelScope.launch {
+            try {
+                val zip = withContext(Dispatchers.IO) { repository.exportToZip() }
+                withContext(Dispatchers.IO) {
+                    contentResolver.openOutputStream(uri)?.use { it.write(zip) }
+                }
+                _state.update { it.copy(snackbarMessage = "已导出 ${state.value.jobs.size} 个任务") }
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = "导出失败: ${e.message}") }
+            }
+        }
+    }
+
+    fun importFromUri(uri: android.net.Uri, contentResolver: android.content.ContentResolver) {
+        viewModelScope.launch {
+            try {
+                val bytes = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                }
+                if (bytes == null) {
+                    _state.update { it.copy(snackbarMessage = "读取文件失败") }
+                    return@launch
+                }
+                val (tasks, scripts) = withContext(Dispatchers.IO) {
+                    repository.importFromZip(bytes)
+                }
+                refresh()
+                val parts = mutableListOf<String>()
+                if (tasks > 0) parts.add("$tasks 个任务")
+                if (scripts > 0) parts.add("$scripts 个脚本")
+                _state.update { it.copy(snackbarMessage = "已导入 ${parts.joinToString(", ")}") }
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = "导入失败：" + (e.message ?: "格式错误")) }
+            }
+        }
+    }
+
+    fun loadScripts() {
+        viewModelScope.launch {
+            val list = withContext(Dispatchers.IO) { repository.listScripts() }
+            _state.update { it.copy(scripts = list) }
+        }
+    }
+
+    fun uploadScript(uri: android.net.Uri, contentResolver: android.content.ContentResolver) {
+        viewModelScope.launch {
+            try {
+                val name = uri.lastPathSegment ?: "script.sh"
+                val bytes = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                }
+                if (bytes == null) {
+                    _state.update { it.copy(snackbarMessage = "读取文件失败") }
+                    return@launch
+                }
+                val ok = withContext(Dispatchers.IO) { repository.uploadScript(name, bytes) }
+                _state.update { it.copy(snackbarMessage = if (ok) "已上传: $name" else "上传失败") }
+                if (ok) loadScripts()
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = "上传失败: ${e.message}") }
+            }
+        }
+    }
+
+    fun deleteScript(name: String) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) { repository.deleteScript(name) }
+            _state.update { it.copy(snackbarMessage = if (ok) "已删除: $name" else "删除失败") }
+            if (ok) loadScripts()
+        }
+    }
+
+    fun showScriptsDialog() {
+        loadScripts()
+        _state.update { it.copy(showScriptsDialog = true) }
+    }
+
+    fun hideScriptsDialog() {
+        _state.update { it.copy(showScriptsDialog = false) }
+    }
+
+    private var logStreamJob: kotlinx.coroutines.Job? = null
+    private val logMaxLines = 500
+
+    fun openLogs() {
+        _state.update { it.copy(showLogs = true) }
+        startLogStream()
+        fetchConfig()
+    }
+
+    fun closeLogs() {
+        stopLogStream()
+        _state.update { it.copy(showLogs = false) }
+        reloadJobs()
+    }
+
+    private fun reloadJobs() {
+        viewModelScope.launch {
+            val jobs = withContext(Dispatchers.IO) { repository.getCronJobs() }
+            val running = withContext(Dispatchers.IO) { repository.isKrondRunning() }
+            _state.update { it.copy(jobs = jobs, isKrondRunning = running) }
+        }
+    }
+
+    private fun startLogStream() {
+        if (logStreamJob?.isActive == true) return
+        _state.update { it.copy(isLoadingLogs = true) }
+        logStreamJob = viewModelScope.launch {
+            while (true) {
+                val logs = withContext(Dispatchers.IO) { repository.fetchLogs() }
+                _state.update {
+                    it.copy(
+                        logs = if (logs.size > logMaxLines) logs.takeLast(logMaxLines) else logs,
+                        isLoadingLogs = false
+                    )
+                }
+                kotlinx.coroutines.delay(1500)
+            }
+        }
+    }
+
+    private fun stopLogStream() {
+        logStreamJob?.cancel()
+        logStreamJob = null
+    }
+
+    fun refreshLogs() {
+        viewModelScope.launch {
+            val logs = withContext(Dispatchers.IO) { repository.fetchLogs() }
+            _state.update {
+                it.copy(
+                    logs = if (logs.size > logMaxLines) logs.takeLast(logMaxLines) else logs,
+                    isLoadingLogs = false
+                )
+            }
+        }
+    }
+
+    fun clearLogs() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { repository.clearLogs() }
+            val logs = withContext(Dispatchers.IO) { repository.fetchLogs() }
+            _state.update { it.copy(logs = logs, isLoadingLogs = false) }
+        }
+    }
+
+    fun fetchConfig() {
+        viewModelScope.launch {
+            val target = withContext(Dispatchers.IO) { repository.getLogTarget() }
+            _state.update { it.copy(currentLogTarget = target) }
+        }
+    }
+
+    fun setLogTarget(target: String) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { repository.setLogTarget(target) }
+                _state.update { it.copy(currentLogTarget = target, snackbarMessage = "日志目标: $target") }
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = e.message ?: "设置失败") }
+            }
+        }
+    }
+
+    fun startKrond() {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { repository.startKrond() }
+                var running = false
+                for (i in 0 until 15) {
+                    running = withContext(Dispatchers.IO) { repository.isKrondRunning() }
+                    if (running) break
+                    kotlinx.coroutines.delay(300)
+                }
+                _state.update { it.copy(isKrondRunning = running, snackbarMessage = if (running) "krond 已启动" else "krond 启动失败") }
+                if (running) refresh()
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = e.message ?: "启动失败") }
+            }
+        }
+    }
+
+    fun stopKrond() {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { repository.stopKrond() }
+                val running = withContext(Dispatchers.IO) { repository.isKrondRunning() }
+                _state.update { it.copy(isKrondRunning = running, snackbarMessage = if (!running) "krond 已停止" else "krond 停止失败") }
+                if (!running) refresh()
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = e.message ?: "停止失败") }
+            }
+        }
+    }
+
+    fun restartKrond() {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { repository.restartKrond() }
+                var running = false
+                for (i in 0 until 15) {
+                    running = withContext(Dispatchers.IO) { repository.isKrondRunning() }
+                    if (running) break
+                    kotlinx.coroutines.delay(300)
+                }
+                _state.update { it.copy(isKrondRunning = running, snackbarMessage = if (running) "krond 已重启" else "krond 重启失败") }
+                if (running) refresh()
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = e.message ?: "重启失败") }
+            }
+        }
+    }
+}
