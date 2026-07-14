@@ -273,11 +273,17 @@ fun CronJobCard(
 
 @Composable
 fun SectionHeader(title: String, count: Int, color: Color) {
-    val bgAlpha = if (title.contains("未开启")) 0.05f else 0.1f
     Surface(
-        color = color.copy(alpha = bgAlpha),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        shadowElevation = 2.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(color.copy(alpha = 0.08f))
+        ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -294,4 +300,5 @@ fun SectionHeader(title: String, count: Int, color: Color) {
             )
         }
     }
+}
 }
