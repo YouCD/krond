@@ -119,7 +119,7 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
                 },
                 scrollBehavior = scrollBehavior,
                 actions = {
-                    IconButton(onClick = { viewModel.openLogs() }) {
+                    IconButton(onClick = { viewModel.selectTab(1) }) {
                         Icon(Icons.Default.Terminal, contentDescription = "日志")
                     }
                     AppMenuButton(

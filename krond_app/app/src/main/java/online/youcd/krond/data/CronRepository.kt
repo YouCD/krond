@@ -49,6 +49,7 @@ class CronRepository(
 
     fun getLogTarget(): String = client.getLogTarget()
     fun setLogTarget(target: String) = client.updateLogTarget(target)
+    fun fetchMetrics(): KrondMetrics = MetricsClient(client).fetchMetrics()
 
     fun exportToJson(): String {
         val jobs = getCronJobs()

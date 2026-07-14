@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
@@ -48,11 +46,9 @@ fun LogScreen(
     logs: List<String>,
     isLoading: Boolean,
     currentLogTarget: String,
-    onBack: () -> Unit,
     onClear: () -> Unit,
     onLogTargetChange: (String) -> Unit
 ) {
-    BackHandler { onBack() }
     val listState = rememberLazyListState()
     var autoScroll by remember { mutableStateOf(true) }
     var showTargetMenu by remember { mutableStateOf(false) }
@@ -71,11 +67,6 @@ fun LogScreen(
         topBar = {
             TopAppBar(
                 title = { Text("执行日志") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                },
                 actions = {
                     Box {
                         IconButton(onClick = { showTargetMenu = true }) {

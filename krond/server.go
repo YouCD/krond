@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 const (
@@ -125,6 +127,10 @@ func startHTTPServer(cfg *Config, sched *Scheduler) *http.Server {
 	mux.HandleFunc("POST /api/logs/clear", handleClearLogs)
 	mux.HandleFunc("GET /api/config", handleGetConfig)
 	mux.HandleFunc("PUT /api/config", handleUpdateConfig(cfg))
+	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
+		krondUptime.Set(time.Since(startTime).Seconds())
+		promhttp.Handler().ServeHTTP(w, r)
+	})
 
 	ln, err := net.Listen("unix", cfg.Socket)
 	if err != nil {

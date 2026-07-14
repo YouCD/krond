@@ -65,14 +65,17 @@ func executeJob(job Job) {
 			appLogger.Printf("[%s] 失败 (退出码 %d, 耗时 %v)", job.Name, exitErr.ExitCode(), elapsed)
 			recordJobResult(job.ID, start, exitErr.ExitCode())
 			broadcastJobResult(job.ID, job.Name, exitErr.ExitCode(), elapsed)
+			recordMetrics(job.ID, job.Name, exitErr.ExitCode(), elapsed)
 		} else {
 			appLogger.Printf("[%s] 执行错误: %v (耗时 %v)", job.Name, err, elapsed)
 			recordJobResult(job.ID, start, -1)
 			broadcastJobResult(job.ID, job.Name, -1, elapsed)
+			recordMetrics(job.ID, job.Name, -1, elapsed)
 		}
 	} else {
 		appLogger.Printf("[%s] 完成 (退出码 0, 耗时 %v)", job.Name, elapsed)
 		recordJobResult(job.ID, start, 0)
 		broadcastJobResult(job.ID, job.Name, 0, elapsed)
+		recordMetrics(job.ID, job.Name, 0, elapsed)
 	}
 }

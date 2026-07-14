@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import online.youcd.krond.data.CronJob
 import online.youcd.krond.data.CronRepository
+import online.youcd.krond.data.KrondMetrics
 import online.youcd.krond.data.ScriptDetail
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class CronUiState(
+    val selectedTab: Int = 0,
     val jobs: List<CronJob> = emptyList(),
     val hasRoot: Boolean = false,
     val isLoading: Boolean = true,
@@ -23,7 +25,6 @@ data class CronUiState(
     val showAddDialog: Boolean = false,
     val editingJob: CronJob? = null,
     val snackbarMessage: String? = null,
-    val showLogs: Boolean = false,
     val logs: List<String> = emptyList(),
     val isLoadingLogs: Boolean = false,
     val isKrondRunning: Boolean = false,
@@ -33,7 +34,9 @@ data class CronUiState(
     val scripts: List<ScriptDetail> = emptyList(),
     val showScriptsDialog: Boolean = false,
     val selectedScriptContent: String? = null,
-    val showScriptContent: Boolean = false
+    val showScriptContent: Boolean = false,
+    val metrics: KrondMetrics? = null,
+    val isLoadingMetrics: Boolean = false,
 )
 
 class CronViewModel(application: Application) : AndroidViewModel(application) {
@@ -328,16 +331,41 @@ class CronViewModel(application: Application) : AndroidViewModel(application) {
     private var logStreamJob: kotlinx.coroutines.Job? = null
     private val logMaxLines = 500
 
+    fun selectTab(tab: Int) {
+        _state.update { it.copy(selectedTab = tab) }
+        if (tab == 1) {
+            startLogStream()
+            fetchConfig()
+        } else if (tab == 0) {
+            stopLogStream()
+            reloadJobs()
+        } else if (tab == 2) {
+            loadMetrics()
+        }
+    }
+
     fun openLogs() {
-        _state.update { it.copy(showLogs = true) }
-        startLogStream()
-        fetchConfig()
+        selectTab(1)
     }
 
     fun closeLogs() {
-        stopLogStream()
-        _state.update { it.copy(showLogs = false) }
-        reloadJobs()
+        selectTab(0)
+    }
+
+    fun loadMetrics() {
+        viewModelScope.launch {
+            _state.update { it.copy(isLoadingMetrics = true) }
+            try {
+                val metrics = withContext(Dispatchers.IO) { repository.fetchMetrics() }
+                _state.update { it.copy(metrics = metrics, isLoadingMetrics = false) }
+            } catch (e: Exception) {
+                _state.update { it.copy(metrics = null, isLoadingMetrics = false) }
+            }
+        }
+    }
+
+    fun refreshMetrics() {
+        loadMetrics()
     }
 
     private fun reloadJobs() {
