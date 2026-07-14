@@ -37,6 +37,7 @@ data class CronUiState(
     val showScriptContent: Boolean = false,
     val metrics: KrondMetrics? = null,
     val isLoadingMetrics: Boolean = false,
+    val lastMetricsUpdateTime: Long? = null,
 )
 
 class CronViewModel(application: Application) : AndroidViewModel(application) {
@@ -357,7 +358,7 @@ class CronViewModel(application: Application) : AndroidViewModel(application) {
             _state.update { it.copy(isLoadingMetrics = true) }
             try {
                 val metrics = withContext(Dispatchers.IO) { repository.fetchMetrics() }
-                _state.update { it.copy(metrics = metrics, isLoadingMetrics = false) }
+                _state.update { it.copy(metrics = metrics, isLoadingMetrics = false, lastMetricsUpdateTime = System.currentTimeMillis()) }
             } catch (e: Exception) {
                 _state.update { it.copy(metrics = null, isLoadingMetrics = false) }
             }
