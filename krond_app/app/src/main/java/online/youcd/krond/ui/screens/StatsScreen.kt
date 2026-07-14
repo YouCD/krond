@@ -1,6 +1,11 @@
 package online.youcd.krond.ui.screens
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -63,7 +68,19 @@ import java.util.Locale
 @Composable
 fun StatsScreen(viewModel: CronViewModel) {
     val state by viewModel.state.collectAsState()
-    var refreshRotation by remember { mutableStateOf(0f) }
+    var rotateTrigger by remember { mutableStateOf(0L) }
+    val infiniteTransition = rememberInfiniteTransition(label = "refreshSpin")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            tween(800, easing = LinearEasing),
+            RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+    val refreshRotation = if (state.isLoadingMetrics) rotation else 0f
+    LaunchedEffect(rotateTrigger) { viewModel.refreshMetrics() }
 
     Scaffold(
         topBar = {
@@ -88,10 +105,7 @@ fun StatsScreen(viewModel: CronViewModel) {
                     containerColor = MaterialTheme.colorScheme.surface
                 ),
                 actions = {
-                    IconButton(onClick = {
-                        refreshRotation += 360f
-                        viewModel.refreshMetrics()
-                    }) {
+                    IconButton(onClick = { rotateTrigger = System.currentTimeMillis() }) {
                         Icon(
                             Icons.Default.Refresh,
                             contentDescription = "刷新",

@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt">
+    <aapt:attr name="android:drawable">
+        <vector
+            android:width="512dp"
+            android:height="512dp"
+            android:viewportWidth="512"
+            android:viewportHeight="512">
+
+            <path
+                android:name="outer_circle"
+                android:fillColor="#FF3DDC84"
+                android:pathData="M456,256 A200,200 0,1,1 56,256 A200,200 0,1,1 456,256 Z" />
+
+            <path
+                android:name="inner_circle"
+                android:fillColor="#FF2D3748"
+                android:strokeColor="#FFFFFFFF"
+                android:strokeWidth="6"
+                android:pathData="M404,256 A148,148 0,1,1 108,256 A148,148 0,1,1 404,256 Z" />
+
+            <group
+                android:name="minute_hand"
+                android:pivotX="256"
+                android:pivotY="256"
+                android:rotation="0">
+                <path
+                    android:fillColor="#FFFFFFFF"
+                    android:pathData="M 252 256 L 260 256 L 260 370 L 252 370 Z" />
+            </group>
+
+            <group
+                android:name="hour_hand"
+                android:pivotX="256"
+                android:pivotY="256"
+                android:rotation="-75">
+                <path
+                    android:fillColor="#FF3DDC84"
+                    android:pathData="M 254 256 L 262 256 L 262 330 L 254 330 Z" />
+            </group>
+
+            <path
+                android:name="center_dot"
+                android:fillColor="#FF3DDC84"
+                android:pathData="M 264 256 A 8 8 0 1 1 248 256 A 8 8 0 1 1 264 256 Z" />
+
+            <path
+                android:name="center_inner"
+                android:fillColor="#FF1A202C"
+                android:pathData="M 260 256 A 4 4 0 1 1 252 256 A 4 4 0 1 1 260 256 Z" />
+
+            <group android:name="asterisks" android:alpha="0">
+                <path
+                    android:strokeColor="#FF3DDC84"
+                    android:strokeWidth="3"
+                    android:strokeLineCap="round"
+                    android:pathData="M 197 202 L 205 210 M 205 202 L 197 210
+                             M 224 202 L 232 210 M 232 202 L 224 210
+                             M 252 202 L 260 210 M 260 202 L 252 210
+                             M 279 202 L 287 210 M 287 202 L 279 210
+                             M 306 202 L 314 210 M 314 202 L 306 210" />
+            </group>
+
+            <group android:name="prompt" android:alpha="0">
+                <path
+                    android:strokeColor="#FFFFFFFF"
+                    android:strokeWidth="3"
+                    android:strokeLineCap="round"
+                    android:strokeLineJoin="round"
+                    android:pathData="M 182 240 L 192 248 L 182 256" />
+                <path
+                    android:strokeColor="#FFFFFFFF"
+                    android:strokeWidth="3"
+                    android:strokeLineCap="round"
+                    android:pathData="M 198 248 L 214 248" />
+            </group>
+        </vector>
+    </aapt:attr>
+
+    <target android:name="minute_hand">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="rotation"
+                android:valueFrom="0"
+                android:valueTo="180"
+                android:duration="250"
+                android:startOffset="30"
+                android:interpolator="@android:interpolator/fast_out_slow_in" />
+        </aapt:attr>
+    </target>
+
+    <target android:name="hour_hand">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="rotation"
+                android:valueFrom="-75"
+                android:valueTo="-90"
+                android:duration="250"
+                android:startOffset="30"
+                android:interpolator="@android:interpolator/fast_out_slow_in" />
+        </aapt:attr>
+    </target>
+
+    <target android:name="asterisks">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="alpha"
+                android:valueFrom="0"
+                android:valueTo="1"
+                android:duration="200"
+                android:startOffset="150"
+                android:interpolator="@android:interpolator/fast_out_slow_in" />
+        </aapt:attr>
+    </target>
+
+    <target android:name="prompt">
+        <aapt:attr name="android:animation">
+            <objectAnimator
+                android:propertyName="alpha"
+                android:valueFrom="0"
+                android:valueTo="1"
+                android:duration="200"
+                android:startOffset="250"
+                android:interpolator="@android:interpolator/fast_out_slow_in" />
+        </aapt:attr>
+    </target>
+</animated-vector>

@@ -3,5 +3,6 @@
     <style name="Theme.CronApp" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:forceDarkAllowed">false</item>
         <item name="android:windowBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash</item>
     </style>
 </resources>

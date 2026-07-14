@@ -65,52 +65,51 @@ class MainActivity : ComponentActivity() {
                 val state by viewModel.state.collectAsState()
 
                 Scaffold(
-                    bottomBar = {
-                        NavigationBar(
-                            modifier = Modifier.navigationBarsPadding()
-                        ) {
-                            BottomNavItem(
-                                selected = state.selectedTab == 0,
-                                onClick = { viewModel.selectTab(0) },
-                                selectedIcon = Icons.Filled.Schedule,
-                                unselectedIcon = Icons.Outlined.Schedule,
-                                label = "任务"
-                            )
-                            BottomNavItem(
-                                selected = state.selectedTab == 1,
-                                onClick = { viewModel.selectTab(1) },
-                                selectedIcon = Icons.Filled.Terminal,
-                                unselectedIcon = Icons.Outlined.Terminal,
-                                label = "日志"
-                            )
-                            BottomNavItem(
-                                selected = state.selectedTab == 2,
-                                onClick = { viewModel.selectTab(2) },
-                                selectedIcon = Icons.Filled.BarChart,
-                                unselectedIcon = Icons.Outlined.BarChart,
-                                label = "统计"
-                            )
-                        }
-                    }
-                ) { padding ->
-                    Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
-                        when (state.selectedTab) {
-                            0 -> CronScreen(viewModel)
-                            1 -> LogScreen(
-                                    logs = state.logs,
-                                    isLoading = state.isLoadingLogs,
-                                    currentLogTarget = state.currentLogTarget,
-                                    onClear = { viewModel.clearLogs() },
-                                    onLogTargetChange = { viewModel.setLogTarget(it) }
+                        bottomBar = {
+                            NavigationBar(
+                                modifier = Modifier.navigationBarsPadding()
+                            ) {
+                                BottomNavItem(
+                                    selected = state.selectedTab == 0,
+                                    onClick = { viewModel.selectTab(0) },
+                                    selectedIcon = Icons.Filled.Schedule,
+                                    unselectedIcon = Icons.Outlined.Schedule,
+                                    label = "任务"
                                 )
-                            2 -> StatsScreen(viewModel)
+                                BottomNavItem(
+                                    selected = state.selectedTab == 1,
+                                    onClick = { viewModel.selectTab(1) },
+                                    selectedIcon = Icons.Filled.Terminal,
+                                    unselectedIcon = Icons.Outlined.Terminal,
+                                    label = "日志"
+                                )
+                                BottomNavItem(
+                                    selected = state.selectedTab == 2,
+                                    onClick = { viewModel.selectTab(2) },
+                                    selectedIcon = Icons.Filled.BarChart,
+                                    unselectedIcon = Icons.Outlined.BarChart,
+                                    label = "统计"
+                                )
+                            }
+                        }
+                    ) { padding ->
+                        Box(Modifier.fillMaxSize().padding(bottom = padding.calculateBottomPadding())) {
+                            when (state.selectedTab) {
+                                0 -> CronScreen(viewModel)
+                                1 -> LogScreen(
+                                        logs = state.logs,
+                                        isLoading = state.isLoadingLogs,
+                                        currentLogTarget = state.currentLogTarget,
+                                        onClear = { viewModel.clearLogs() },
+                                        onLogTargetChange = { viewModel.setLogTarget(it) }
+                                    )
+                                2 -> StatsScreen(viewModel)
+                            }
                         }
                     }
-                }
             }
         }
     }
-
     private fun requestNotifPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
