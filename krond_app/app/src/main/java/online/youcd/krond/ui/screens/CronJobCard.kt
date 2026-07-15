@@ -116,13 +116,17 @@ fun CronJobCard(
                         shape = RoundedCornerShape(4.dp),
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
                     ) {
-                        Text(
-                            text = job.schedule,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.primary,
+                        Box(
+                            contentAlignment = Alignment.Center,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                        ) {
+                            Text(
+                                text = job.schedule,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
 
                     Text(
