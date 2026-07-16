@@ -18,7 +18,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -43,7 +42,6 @@ fun AppMenuButton(
     onMenuExpandedChange: (Boolean) -> Unit,
     onImport: () -> Unit,
     onExport: () -> Unit,
-    onUploadScript: () -> Unit,
     onManageScripts: () -> Unit
 ) {
     Box {
@@ -79,17 +77,6 @@ fun AppMenuButton(
 
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-            DropdownMenuItem(
-                text = { Text("上传脚本") },
-                leadingIcon = {
-                    Icon(
-                        Icons.Default.UploadFile,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                onClick = onUploadScript
-            )
             DropdownMenuItem(
                 text = { Text("脚本管理") },
                 leadingIcon = {

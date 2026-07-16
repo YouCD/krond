@@ -57,6 +57,7 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
     var krondMenuExpanded by remember { mutableStateOf(false) }
     var appMenuExpanded by remember { mutableStateOf(false) }
     var showStopConfirmDialog by remember { mutableStateOf(false) }
+    var pendingUploadFolder by remember { mutableStateOf("") }
     val context = LocalContext.current
 
     val importLauncher = rememberLauncherForActivityResult(
@@ -71,7 +72,7 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            viewModel.uploadScript(uri, context.contentResolver)
+            viewModel.uploadScript(uri, context.contentResolver, pendingUploadFolder)
         }
     }
 
@@ -126,14 +127,10 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
                         onImport = { appMenuExpanded = false; importLauncher.launch(arrayOf("*/*")) },
                         onExport = {
                             appMenuExpanded = false
-                            val fileName = java.text.SimpleDateFormat(
-                                "yyyy_MM_dd-HHmmss", java.util.Locale.getDefault()
-                            ).format(java.util.Date()) + "_krond.zip"
+                            val fileName = "krond_" + java.text.SimpleDateFormat(
+                                "yyyyMMdd_HHmmss", java.util.Locale.getDefault()
+                            ).format(java.util.Date()) + ".tar"
                             exportLauncher.launch(fileName)
-                        },
-                        onUploadScript = {
-                            appMenuExpanded = false
-                            scriptUploadLauncher.launch(arrayOf("*/*"))
                         },
                         onManageScripts = {
                             appMenuExpanded = false
@@ -247,10 +244,16 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
     if (state.showScriptsDialog) {
         ScriptsDialog(
             scripts = state.scripts,
+            currentFolder = state.currentScriptFolder,
             onView = { viewModel.viewScript(it) },
             onDelete = { viewModel.deleteScript(it) },
             onRefresh = { viewModel.loadScripts() },
-            onUpload = { scriptUploadLauncher.launch(arrayOf("*/*")) },
+            onUpload = {
+                pendingUploadFolder = state.currentScriptFolder
+                scriptUploadLauncher.launch(arrayOf("*/*"))
+            },
+            onCreateFolder = { viewModel.createScriptFolder(it) },
+            onNavigateFolder = { viewModel.setScriptFolder(it) },
             onDismiss = { viewModel.hideScriptsDialog() }
         )
     }

@@ -33,6 +33,7 @@ data class CronUiState(
     val currentLogTarget: String = "both",
     val scripts: List<ScriptDetail> = emptyList(),
     val showScriptsDialog: Boolean = false,
+    val currentScriptFolder: String = "",
     val selectedScriptContent: String? = null,
     val showScriptContent: Boolean = false,
     val metrics: KrondMetrics? = null,
@@ -225,9 +226,13 @@ class CronViewModel(application: Application) : AndroidViewModel(application) {
     fun exportToUri(uri: android.net.Uri, contentResolver: android.content.ContentResolver) {
         viewModelScope.launch {
             try {
-                val zip = withContext(Dispatchers.IO) { repository.exportToZip() }
+                val tar = withContext(Dispatchers.IO) { repository.exportToTar() }
+                android.util.Log.d("CronVM", "exportToTar size=${tar.size}")
                 withContext(Dispatchers.IO) {
-                    contentResolver.openOutputStream(uri)?.use { it.write(zip) }
+                    contentResolver.openOutputStream(uri)?.use {
+                        it.write(tar)
+                        it.flush()
+                    }
                 }
                 _state.update { it.copy(snackbarMessage = "已导出 ${state.value.jobs.size} 个任务") }
             } catch (e: Exception) {
@@ -247,7 +252,9 @@ class CronViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
                 val (tasks, scripts) = withContext(Dispatchers.IO) {
-                    repository.importFromZip(bytes)
+                    val result = repository.importFromTar(bytes)
+                    android.util.Log.d("CronVM", "importFromTar: tasks=${result.first}, scripts=${result.second}")
+                    result
                 }
                 val jobs = withContext(Dispatchers.IO) { repository.getCronJobs() }
                 val running = withContext(Dispatchers.IO) { repository.isKrondRunning() }
@@ -268,7 +275,7 @@ class CronViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun uploadScript(uri: android.net.Uri, contentResolver: android.content.ContentResolver) {
+    fun uploadScript(uri: android.net.Uri, contentResolver: android.content.ContentResolver, targetFolder: String = "") {
         viewModelScope.launch {
             try {
                 val name = withContext(Dispatchers.IO) {
@@ -285,6 +292,7 @@ class CronViewModel(application: Application) : AndroidViewModel(application) {
                     if (n.isNullOrBlank()) n = uri.lastPathSegment
                     if (n.isNullOrBlank()) "script.sh" else n!!
                 }
+                val fullName = if (targetFolder.isEmpty()) name else "$targetFolder/$name"
                 val bytes = withContext(Dispatchers.IO) {
                     contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 }
@@ -292,8 +300,8 @@ class CronViewModel(application: Application) : AndroidViewModel(application) {
                     _state.update { it.copy(snackbarMessage = "读取文件失败") }
                     return@launch
                 }
-                val ok = withContext(Dispatchers.IO) { repository.uploadScript(name, bytes) }
-                _state.update { it.copy(snackbarMessage = if (ok) "已上传: $name" else "上传失败") }
+                val ok = withContext(Dispatchers.IO) { repository.uploadScript(fullName, bytes) }
+                _state.update { it.copy(snackbarMessage = if (ok) "已上传: $fullName" else "上传失败") }
                 if (ok) loadScripts()
             } catch (e: Exception) {
                 _state.update { it.copy(snackbarMessage = "上传失败: ${e.message}") }
@@ -322,7 +330,21 @@ class CronViewModel(application: Application) : AndroidViewModel(application) {
 
     fun showScriptsDialog() {
         loadScripts()
-        _state.update { it.copy(showScriptsDialog = true) }
+        _state.update { it.copy(showScriptsDialog = true, currentScriptFolder = "") }
+    }
+
+    fun setScriptFolder(path: String) {
+        _state.update { it.copy(currentScriptFolder = path) }
+    }
+
+    fun createScriptFolder(name: String) {
+        viewModelScope.launch {
+            val folder = if (_state.value.currentScriptFolder.isEmpty()) name
+                else "${_state.value.currentScriptFolder}/$name"
+            val ok = withContext(Dispatchers.IO) { repository.createScriptFolder(folder) }
+            _state.update { it.copy(snackbarMessage = if (ok) "已创建文件夹: $name" else "创建失败") }
+            if (ok) loadScripts()
+        }
     }
 
     fun hideScriptsDialog() {

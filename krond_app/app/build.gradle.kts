@@ -95,6 +95,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("org.apache.commons:commons-compress:1.27.1")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.kohlschutter.junixsocket:junixsocket-common:2.10.1")

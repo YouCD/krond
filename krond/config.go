@@ -10,7 +10,7 @@ import (
 const (
 	DefaultSocket     = "@krond"
 	DefaultConfigFile = "/data/krond/krond.yaml"
-	DefaultLogFile    = "/data/krond/krond.log"
+	DefaultLogFile    = "/data/krond/logs/krond.log"
 	DefaultPidFile    = "/data/krond/krond.pid"
 	DefaultLogTarget  = "both"
 )
