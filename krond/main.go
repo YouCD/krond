@@ -84,7 +84,8 @@ func run() {
 	sched = NewScheduler()
 	sched.LoadJobs(cfg.Jobs)
 	sched.Start()
-	appLogger.Printf("krond v%s 启动, %d 个任务加载", Version, len(cfg.Jobs))
+	appLogger.Printf("krond v%s 启动 (pid %d), %d 个任务加载", Version, os.Getpid(), len(cfg.Jobs))
+	sched.PrintJobs(cfg.Jobs)
 
 	// Start HTTP server
 	httpServer = startHTTPServer(cfg, sched)

@@ -86,7 +86,7 @@ fun CronJobCard(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
-                onClick = { onToggle() },
+                onClick = {},
                 onLongClick = { menuExpanded = true }
             ),
         colors = CardDefaults.cardColors(

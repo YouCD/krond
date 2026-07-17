@@ -4,16 +4,16 @@ export PATH=/system/bin:/system/xbin:/sbin:$PATH
 
 MODDIR=${0%/*}
 KROND_BIN=$MODDIR/krond
-KROND_LOG=/data/krond/krond.log
-
 while [ "$(getprop sys.boot_completed)" != "1" ]; do
     sleep 2
 done
 
 # 确保运行目录存在
-for dir in /data/krond; do
+for dir in /data/krond /data/krond/logs; do
     [ -d "$dir" ] || mkdir -p "$dir" 2>/dev/null
 done
+
+KROND_LOG=/data/krond/logs/krond.log
 
 # 如果 /data/krond 还没有默认配置，复制模块自带配置
 if [ -f "$MODDIR/krond.yaml" ] && [ ! -f /data/krond/krond.yaml ]; then

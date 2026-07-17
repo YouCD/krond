@@ -69,6 +69,38 @@ func (s *Scheduler) UpdateJob(job Job) {
 	}
 }
 
+func (s *Scheduler) PrintJobs(jobs []Job) {
+	rev := make(map[cron.EntryID]int)
+	for jobID, entryID := range s.entries {
+		rev[entryID] = jobID
+	}
+	nameMap := make(map[int]string)
+	for _, j := range jobs {
+		nameMap[j.ID] = j.Name
+	}
+
+	entries := s.cron.Entries()
+	appLogger.Printf("调度器: %d 个活跃条目", len(entries))
+	for _, e := range entries {
+		jobID, ok := rev[e.ID]
+		name := "?"
+		if ok {
+			if n, found := nameMap[jobID]; found {
+				name = n
+			}
+		}
+		next := "-"
+		if !e.Next.IsZero() {
+			next = e.Next.Format("15:04:05")
+		}
+		prev := "-"
+		if !e.Prev.IsZero() {
+			prev = e.Prev.Format("15:04:05")
+		}
+		appLogger.Printf("  [%s] job=%d next=%s prev=%s", name, jobID, next, prev)
+	}
+}
+
 func (s *Scheduler) NextRun(id int) (time.Time, bool) {
 	entryID, ok := s.entries[id]
 	if !ok {

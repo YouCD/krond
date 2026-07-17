@@ -4,7 +4,7 @@
 set_perm $MODPATH/krond 0 0 0755
 
 # 安装时预创建运行目录
-for dir in /data/krond /data/krond/scripts; do
+for dir in /data/krond /data/krond/logs /data/krond/scripts; do
     mkdir -p "$dir" 2>/dev/null
 done
 

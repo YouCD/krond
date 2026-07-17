@@ -53,3 +53,4 @@ KrondInjector.apk
 # krond Go 编译产物（本地测试时生成，CI 中编译）
 krond_injector/krond
 .kotlin
+krond/krond
