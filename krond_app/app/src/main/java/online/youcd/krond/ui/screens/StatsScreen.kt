@@ -243,7 +243,7 @@ private fun SimpleBarChart(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 88.dp)
+                    modifier = Modifier.width(88.dp)
                 )
                 Spacer(Modifier.width(8.dp))
                 Box(

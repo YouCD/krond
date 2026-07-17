@@ -2,30 +2,27 @@ package online.youcd.krond.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,44 +39,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import online.youcd.krond.data.ScriptDetail
-
-data class FolderItem(
-    val name: String,
-    val isDirectory: Boolean,
-    val fullPath: String
-)
-
-private fun getFolderItems(scripts: List<ScriptDetail>, currentPath: String): List<FolderItem> {
-    val seenDirs = mutableSetOf<String>()
-    val seenFiles = mutableSetOf<String>()
-    val items = mutableListOf<FolderItem>()
-    val prefix = if (currentPath.isEmpty()) "" else "$currentPath/"
-
-    for (s in scripts) {
-        val relative = if (currentPath.isEmpty()) s.name
-            else s.name.removePrefix(prefix)
-        if (relative == s.name && currentPath.isNotEmpty()) continue
-
-        if (s.isDirectory) {
-            if (relative.isNotEmpty() && !relative.contains("/") && seenDirs.add(relative)) {
-                items.add(FolderItem(relative, true, s.name))
-            }
-        } else {
-            val parts = relative.split("/")
-            val fileName = parts[0]
-            if (parts.size == 1 && fileName.isNotEmpty() && seenFiles.add(fileName)) {
-                items.add(FolderItem(fileName, false, s.name))
-            } else if (parts.size > 1 && fileName.isNotEmpty() && seenDirs.add(fileName)) {
-                val full = if (currentPath.isEmpty()) fileName else "$currentPath/$fileName"
-                items.add(FolderItem(fileName, true, full))
-            }
-        }
-    }
-    return items.sortedBy { if (it.isDirectory) "0" else "1" + it.name }
-}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -95,23 +56,26 @@ fun ScriptsDialog(
     onDismiss: () -> Unit
 ) {
     var showNewFolderDialog by remember { mutableStateOf(false) }
+    var menuTarget by remember { mutableStateOf<String?>(null) }
     val items = remember(scripts, currentFolder) { getFolderItems(scripts, currentFolder) }
-    val folders = items.filter { it.isDirectory }
-    val files = items.filter { !it.isDirectory }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text("脚本管理", modifier = Modifier.weight(1f))
-                IconButton(onClick = onUpload) {
-                    Icon(Icons.Default.CloudUpload, contentDescription = "上传脚本")
+                Text("脚本管理", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onUpload, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Default.CloudUpload, contentDescription = "上传脚本", modifier = Modifier.size(20.dp))
                 }
-                IconButton(onClick = { showNewFolderDialog = true }) {
-                    Icon(Icons.Default.CreateNewFolder, contentDescription = "新建文件夹")
+                IconButton(onClick = { showNewFolderDialog = true }, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Default.CreateNewFolder, contentDescription = "新建文件夹", modifier = Modifier.size(20.dp))
                 }
-                IconButton(onClick = onRefresh) {
-                    Icon(Icons.Default.Refresh, contentDescription = "刷新")
+                IconButton(onClick = onRefresh, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Default.Refresh, contentDescription = "刷新", modifier = Modifier.size(20.dp))
+                }
+                IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "关闭", modifier = Modifier.size(20.dp))
                 }
             }
         },
@@ -119,11 +83,11 @@ fun ScriptsDialog(
             Column {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
                 ) {
                     Text(
                         text = "根目录",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         fontWeight = if (currentFolder.isEmpty()) FontWeight.Bold else FontWeight.Normal,
                         color = if (currentFolder.isEmpty()) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -136,13 +100,13 @@ fun ScriptsDialog(
                         for ((i, seg) in segments.withIndex()) {
                             Text(
                                 text = " > ",
-                                style = MaterialTheme.typography.labelMedium,
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             val path = segments.take(i + 1).joinToString("/")
                             Text(
                                 text = seg,
-                                style = MaterialTheme.typography.labelMedium,
+                                style = MaterialTheme.typography.labelSmall,
                                 fontWeight = if (i == segments.lastIndex) FontWeight.Bold else FontWeight.Normal,
                                 color = if (i == segments.lastIndex) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -160,80 +124,48 @@ fun ScriptsDialog(
                     )
                 }
 
-                if (items.isEmpty()) {
-                    Spacer(Modifier.height(24.dp))
-                    Text(
-                        "此文件夹为空",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
-                    )
-                } else {
-                    LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                        items(folders) { item ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .combinedClickable(onClick = { onNavigateFolder(item.fullPath) }),
-                                verticalAlignment = Alignment.CenterVertically
+                FolderFileList(
+                    items = items,
+                    onFolderClick = { onNavigateFolder(it.fullPath) },
+                    onFileClick = { onView(it.fullPath) },
+                    folderActions = { item ->
+                        Box {
+                            IconButton(onClick = { menuTarget = item.fullPath }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "更多",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                            }
+                            DropdownMenu(
+                                expanded = menuTarget == item.fullPath,
+                                onDismissRequest = { menuTarget = null }
                             ) {
-                                Icon(
-                                    Icons.Default.Folder,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
+                                DropdownMenuItem(
+                                    text = { Text("删除文件夹", color = MaterialTheme.colorScheme.error) },
+                                    onClick = { menuTarget = null; onDelete(item.fullPath) }
                                 )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = item.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                IconButton(onClick = { onDelete(item.fullPath) }) {
-                                    Icon(Icons.Default.Delete, contentDescription = "删除文件夹",
-                                        tint = MaterialTheme.colorScheme.error)
-                                }
                             }
                         }
-                        items(files) { item ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .combinedClickable(onClick = { onView(item.fullPath) }),
-                                verticalAlignment = Alignment.CenterVertically
+                    },
+                    fileActions = { item ->
+                        Box {
+                            IconButton(onClick = { menuTarget = item.fullPath }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "更多",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                            }
+                            DropdownMenu(
+                                expanded = menuTarget == item.fullPath,
+                                onDismissRequest = { menuTarget = null }
                             ) {
-                                Icon(
-                                    imageVector = if (item.name.endsWith(".sh"))
-                                        Icons.Default.Terminal else Icons.Default.Description,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
+                                DropdownMenuItem(
+                                    text = { Text("删除", color = MaterialTheme.colorScheme.error) },
+                                    onClick = { menuTarget = null; onDelete(item.fullPath) }
                                 )
-                                Spacer(Modifier.width(8.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = item.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                                IconButton(onClick = { onDelete(item.fullPath) }) {
-                                    Icon(Icons.Default.Delete, contentDescription = "删除",
-                                        tint = MaterialTheme.colorScheme.error)
-                                }
                             }
                         }
                     }
-                }
+                )
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("关闭") }
-        }
+        confirmButton = {}
     )
 
     if (showNewFolderDialog) {
