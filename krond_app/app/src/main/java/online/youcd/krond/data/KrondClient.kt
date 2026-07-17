@@ -145,4 +145,36 @@ class KrondClient {
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
         }
     }
+
+    fun checkUpdateStatus(): UpdateStatus {
+        val request = Request.Builder().url("$baseUrl/api/update/status").build()
+        return try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return UpdateStatus()
+                val obj = JSONObject(response.body!!.string())
+                UpdateStatus(
+                    currentVersion = obj.optString("currentVersion", obj.optString("current_version", "")),
+                    latestVersion = obj.optString("latestVersion", obj.optString("latest_version", "")),
+                    hasUpdate = obj.optBoolean("hasUpdate", obj.optBoolean("has_update", false)),
+                    downloadUrl = obj.optString("downloadUrl", obj.optString("download_url", "")),
+                    publishedAt = obj.optString("publishedAt", obj.optString("published_at", "")),
+                    isPreRelease = obj.optBoolean("isPreRelease", obj.optBoolean("is_prerelease", false)),
+                    assetSize = obj.optLong("assetSize", obj.optLong("asset_size", 0)),
+                    changelog = obj.optString("changelog", "")
+                )
+            }
+        } catch (_: Exception) {
+            UpdateStatus()
+        }
+    }
+
+    fun applyUpdate() {
+        val request = Request.Builder()
+            .url("$baseUrl/api/update/apply")
+            .post("".toRequestBody(null))
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
+        }
+    }
 }

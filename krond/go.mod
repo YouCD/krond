@@ -7,6 +7,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
+require github.com/coreos/go-semver v0.3.1 // indirect
+
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

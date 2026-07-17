@@ -17,6 +17,7 @@ import (
 )
 
 var Version = "0.0.0-dev"
+var GithubToken = ""
 
 var (
 	startTime  time.Time

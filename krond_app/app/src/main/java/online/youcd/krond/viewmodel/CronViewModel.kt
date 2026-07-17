@@ -9,6 +9,7 @@ import online.youcd.krond.data.CronJob
 import online.youcd.krond.data.CronRepository
 import online.youcd.krond.data.KrondMetrics
 import online.youcd.krond.data.ScriptDetail
+import online.youcd.krond.data.UpdateStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,6 +40,10 @@ data class CronUiState(
     val metrics: KrondMetrics? = null,
     val isLoadingMetrics: Boolean = false,
     val lastMetricsUpdateTime: Long? = null,
+    val updateStatus: UpdateStatus? = null,
+    val isCheckingUpdate: Boolean = false,
+    val isApplyingUpdate: Boolean = false,
+    val showUpdateDialog: Boolean = false,
 )
 
 class CronViewModel(application: Application) : AndroidViewModel(application) {
@@ -488,6 +493,32 @@ class CronViewModel(application: Application) : AndroidViewModel(application) {
                 _state.update { it.copy(snackbarMessage = e.message ?: "停止失败") }
             }
         }
+    }
+
+    fun checkForUpdate() {
+        _state.update { it.copy(isCheckingUpdate = true, showUpdateDialog = true) }
+        viewModelScope.launch {
+            val status = withContext(Dispatchers.IO) { repository.checkUpdateStatus() }
+            _state.update { it.copy(updateStatus = status, isCheckingUpdate = false) }
+        }
+    }
+
+    fun applyUpdate() {
+        _state.update { it.copy(isApplyingUpdate = true) }
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) { repository.applyUpdate() }
+                _state.update { it.copy(snackbarMessage = "更新命令已发送，krond 将重启") }
+            } catch (e: Exception) {
+                _state.update { it.copy(snackbarMessage = "更新失败: ${e.message}") }
+            } finally {
+                _state.update { it.copy(isApplyingUpdate = false, showUpdateDialog = false, updateStatus = null) }
+            }
+        }
+    }
+
+    fun hideUpdateDialog() {
+        _state.update { it.copy(showUpdateDialog = false, updateStatus = null) }
     }
 
     fun restartKrond() {

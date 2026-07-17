@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -42,7 +43,8 @@ fun AppMenuButton(
     onMenuExpandedChange: (Boolean) -> Unit,
     onImport: () -> Unit,
     onExport: () -> Unit,
-    onManageScripts: () -> Unit
+    onManageScripts: () -> Unit,
+    onCheckUpdate: () -> Unit
 ) {
     Box {
         IconButton(onClick = { onMenuExpandedChange(true) }) {
@@ -87,6 +89,23 @@ fun AppMenuButton(
                     )
                 },
                 onClick = onManageScripts
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            DropdownMenuItem(
+                text = { Text("检查更新") },
+                leadingIcon = {
+                    Icon(
+                        Icons.Default.SystemUpdateAlt,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                onClick = {
+                    onMenuExpandedChange(false)
+                    onCheckUpdate()
+                }
             )
         }
     }

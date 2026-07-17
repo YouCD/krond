@@ -28,7 +28,12 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install NDK
+        run: sdkmanager "ndk;27.0.12077973"
+
       - name: Build module zip (krond + APK + 注入版本 + 打包)
+        env:
+          GH_RELEASE: ${{ secrets.GH_RELEASE }}
         run: bash build-module.sh
 
       - name: Save update.json for later sync

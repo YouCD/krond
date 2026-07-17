@@ -15,6 +15,17 @@ data class ScriptDetail(
     val isDirectory: Boolean = false
 )
 
+data class UpdateStatus(
+    val currentVersion: String = "",
+    val latestVersion: String = "",
+    val hasUpdate: Boolean = false,
+    val downloadUrl: String = "",
+    val publishedAt: String = "",
+    val isPreRelease: Boolean = false,
+    val assetSize: Long = 0,
+    val changelog: String = ""
+)
+
 data class CronJob(
     val id: Int,
     val name: String = "",
@@ -44,6 +55,9 @@ class CronRepository(
     fun stopKrond() = service.stopKrond()
     fun restartKrond() = service.restartKrond()
     fun runJob(id: Int) = cronTab.runJob(id)
+
+    fun checkUpdateStatus(): UpdateStatus = client.checkUpdateStatus()
+    fun applyUpdate() = client.applyUpdate()
 
     fun fetchLogs(): List<String> = logs.fetchLogs()
     fun clearLogs() = logs.clearLogs()

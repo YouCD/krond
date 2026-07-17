@@ -127,6 +127,8 @@ func startHTTPServer(cfg *Config, sched *Scheduler) *http.Server {
 	mux.HandleFunc("POST /api/logs/clear", handleClearLogs)
 	mux.HandleFunc("GET /api/config", handleGetConfig)
 	mux.HandleFunc("PUT /api/config", handleUpdateConfig(cfg))
+	mux.HandleFunc("GET /api/update/status", handleUpdateStatus)
+	mux.HandleFunc("POST /api/update/apply", handleUpdateApply)
 	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
 		krondUptime.Set(time.Since(startTime).Seconds())
 		promhttp.Handler().ServeHTTP(w, r)
@@ -442,6 +444,60 @@ func handleUpdateConfig(cfg *Config) http.HandlerFunc {
 			"log_target": cfg.LogTarget,
 		})
 	}
+}
+
+// --- update ---
+
+func handleUpdateStatus(w http.ResponseWriter, r *http.Request) {
+	status, err := checkUpdate()
+	if err != nil {
+		appLogger.Printf("检查更新失败: %v", err)
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"currentVersion": Version,
+			"error":          err.Error(),
+			"hasUpdate":      false,
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func handleUpdateApply(w http.ResponseWriter, r *http.Request) {
+	status, err := checkUpdate()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "检查更新失败: "+err.Error())
+		return
+	}
+	if !status.HasUpdate {
+		writeError(w, http.StatusBadRequest, "当前已是最新版本")
+		return
+	}
+	if status.DownloadURL == "" {
+		writeError(w, http.StatusBadRequest, "未找到更新包下载链接")
+		return
+	}
+
+	if err := downloadUpdate(status.DownloadURL); err != nil {
+		appLogger.Printf("下载更新失败: %v", err)
+		writeError(w, http.StatusInternalServerError, "下载更新失败: "+err.Error())
+		return
+	}
+
+	if err := triggerUpdate(); err != nil {
+		appLogger.Printf("启动更新脚本失败: %v", err)
+		writeError(w, http.StatusInternalServerError, "启动更新失败: "+err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"message": "更新已启动，krond 即将关闭重启",
+	})
+
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		shutdownForUpdate()
+	}()
 }
 
 // --- helpers ---

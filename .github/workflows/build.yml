@@ -18,11 +18,6 @@ jobs:
         with:
           go-version: '1.26'
 
-      - name: Cross-compile krond (arm64)
-        run: |
-          cd krond
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o ../krond_injector/krond .
-
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -32,10 +27,10 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages
+      - name: Install Android SDK/NDK packages
         run: |
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973"
 
       - name: Prepare signing keystore
         id: sign
@@ -62,23 +57,14 @@ jobs:
             echo "kpass=android" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build release APK & run unit tests
-        working-directory: krond_app
+      - name: Build module (krond + APK + zip)
         env:
           KEYSTORE_FILE: ${{ steps.sign.outputs.file }}
           KEYSTORE_PASSWORD: ${{ steps.sign.outputs.pass }}
           KEY_ALIAS: ${{ steps.sign.outputs.alias }}
           KEY_PASSWORD: ${{ steps.sign.outputs.kpass }}
-        run: |
-          chmod +x gradlew
-          ./gradlew testDebugUnitTest assembleRelease
-
-      - name: Package KernelSU module (includes krond + app)
-        run: |
-          cd krond_injector
-          cp ../krond_app/app/build/outputs/apk/release/app-release.apk KrondInjector.apk
-          zip -r ../krond_injector.zip . -x "*.log"
-          cd ..
+          GH_RELEASE: ${{ secrets.GH_RELEASE }}
+        run: bash build-module.sh
 
       - name: Upload module zip
         uses: actions/upload-artifact@v4

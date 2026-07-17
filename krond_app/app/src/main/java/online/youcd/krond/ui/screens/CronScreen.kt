@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -13,13 +14,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -135,7 +141,8 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
                         onManageScripts = {
                             appMenuExpanded = false
                             viewModel.showScriptsDialog()
-                        }
+                        },
+                        onCheckUpdate = { viewModel.checkForUpdate() }
                     )
                     KrondControlButton(
                         isRunning = state.isKrondRunning,
@@ -286,8 +293,185 @@ fun CronScreen(viewModel: CronViewModel = viewModel()) {
         )
     }
 
+    if (state.showUpdateDialog) {
+        UpdateDialog(
+            updateStatus = state.updateStatus,
+            isChecking = state.isCheckingUpdate,
+            isApplying = state.isApplyingUpdate,
+            onDismiss = { viewModel.hideUpdateDialog() },
+            onApply = { viewModel.applyUpdate() }
+        )
+    }
+
 }
 
+@Composable
+private fun UpdateDialog(
+    updateStatus: online.youcd.krond.data.UpdateStatus?,
+    isChecking: Boolean,
+    isApplying: Boolean,
+    onDismiss: () -> Unit,
+    onApply: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { if (!isChecking && !isApplying) onDismiss() },
+        title = { Text("检查更新") },
+        text = {
+            when {
+                isChecking -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        Text("正在检查更新...")
+                    }
+                }
+                isApplying -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        Text("正在应用更新...")
+                    }
+                }
+                updateStatus == null -> {
+                    Text("获取更新信息失败")
+                }
+                updateStatus.hasUpdate -> {
+                    HasUpdateContent(updateStatus)
+                }
+                else -> {
+                    NoUpdateContent(updateStatus)
+                }
+            }
+        },
+        confirmButton = {
+            if (updateStatus != null && updateStatus.hasUpdate && !isApplying) {
+                TextButton(
+                    onClick = onApply,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)
+                ) {
+                    Text("🚀 立即更新", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        },
+        dismissButton = {}
+    )
+}
+
+@Composable
+private fun HasUpdateContent(status: online.youcd.krond.data.UpdateStatus) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // 头部卡片
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text("🎉 发现新版本", style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("v${status.currentVersion}",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f))
+                    Icon(Icons.Default.ArrowForward, null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(18.dp))
+                    Text("v${status.latestVersion}",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+                Text(
+                    "${if (status.isPreRelease) "🛠 测试版" else "✅ 稳定版"} · ${formatDate(status.publishedAt)} · ${formatSize(status.assetSize)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                )
+            }
+        }
+
+        // 更新日志
+        if (status.changelog.isNotBlank()) {
+            var expanded by remember { mutableStateOf(false) }
+            val lines = status.changelog.lines().filter { it.isNotBlank() }
+            val displayLines = if (expanded) lines else lines.take(8)
+
+            Text("更新日志", style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary)
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = displayLines.joinToString("\n"),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (lines.size > 8) {
+                        TextButton(
+                            onClick = { expanded = !expanded },
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text(if (expanded) "收起" else "展开更多 (${lines.size - 8} 条)")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NoUpdateContent(status: online.youcd.krond.data.UpdateStatus) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text("✅ 已是最新版本", style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("v${status.currentVersion}",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "${if (status.isPreRelease) "测试版" else "稳定版"} · ${formatDate(status.publishedAt)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
+        }
+    }
+}
+
+private fun formatDate(iso: String): String {
+    return iso.substringBefore("T")
+}
+
+private fun formatSize(bytes: Long): String {
+    return when {
+        bytes >= 1_000_000 -> "%.1f MB".format(bytes / 1_000_000.0)
+        bytes >= 1_000 -> "%.0f KB".format(bytes / 1_000.0)
+        else -> "$bytes B"
+    }
+}
 
 
 
