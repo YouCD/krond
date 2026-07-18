@@ -81,11 +81,33 @@ func run() {
 	setupLogger(cfg)
 
 	// Setup scheduler
-	sched = NewScheduler()
+	sched = NewScheduler(logWriter)
 	sched.LoadJobs(cfg.Jobs)
 	sched.Start()
 	appLogger.Printf("krond v%s 启动 (pid %d), %d 个任务加载", Version, os.Getpid(), len(cfg.Jobs))
 	sched.PrintJobs(cfg.Jobs)
+
+	go func() {
+		time.Sleep(15 * time.Second)
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for {
+			entries := sched.CronEntries()
+			appLogger.Printf("[诊断] cron 状态: %d 条目, 存活=%v", len(entries), sched.IsRunning())
+			for _, e := range entries {
+				next := "-"
+				if !e.Next.IsZero() {
+					next = e.Next.Format("15:04:05")
+				}
+				prev := "-"
+				if !e.Prev.IsZero() {
+					prev = e.Prev.Format("15:04:05")
+				}
+				appLogger.Printf("[诊断]   entry=%d next=%s prev=%s", e.ID, next, prev)
+			}
+			<-ticker.C
+		}
+	}()
 
 	// Start HTTP server
 	httpServer = startHTTPServer(cfg, sched)

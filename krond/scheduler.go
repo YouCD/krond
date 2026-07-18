@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"io"
+	"log"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -12,9 +14,13 @@ type Scheduler struct {
 	entries map[int]cron.EntryID
 }
 
-func NewScheduler() *Scheduler {
+func NewScheduler(writer io.Writer) *Scheduler {
+	cronLogger := log.New(writer, "[cron] ", log.Ldate|log.Ltime)
 	return &Scheduler{
-		cron:    cron.New(),
+		cron: cron.New(
+			cron.WithLogger(cron.VerbosePrintfLogger(cronLogger)),
+			cron.WithChain(cron.Recover(cron.VerbosePrintfLogger(cronLogger))),
+		),
 		entries: make(map[int]cron.EntryID),
 	}
 }
@@ -67,6 +73,14 @@ func (s *Scheduler) UpdateJob(job Job) {
 	} else {
 		delete(s.entries, job.ID)
 	}
+}
+
+func (s *Scheduler) IsRunning() bool {
+	return s.cron.Entries() != nil
+}
+
+func (s *Scheduler) CronEntries() []cron.Entry {
+	return s.cron.Entries()
 }
 
 func (s *Scheduler) PrintJobs(jobs []Job) {
