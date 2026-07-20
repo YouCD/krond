@@ -18,6 +18,7 @@ func NewScheduler(writer io.Writer) *Scheduler {
 	cronLogger := log.New(writer, "[cron] ", log.Ldate|log.Ltime)
 	return &Scheduler{
 		cron: cron.New(
+			cron.WithLocation(time.Local),
 			cron.WithLogger(cron.VerbosePrintfLogger(cronLogger)),
 			cron.WithChain(cron.Recover(cron.VerbosePrintfLogger(cronLogger))),
 		),
@@ -83,6 +84,55 @@ func (s *Scheduler) CronEntries() []cron.Entry {
 	return s.cron.Entries()
 }
 
+func (s *Scheduler) EnabledCount() int {
+	count := 0
+	for _, id := range s.entries {
+		if id != 0 {
+			count++
+		}
+	}
+	return count
+}
+
+func (s *Scheduler) Healthy() bool {
+	if s.cron.Entries() == nil {
+		return false
+	}
+	return true
+}
+
+func (s *Scheduler) EntryCount() int {
+	return len(s.cron.Entries())
+}
+
+func (s *Scheduler) AllNextInPast() bool {
+	now := time.Now()
+	for _, e := range s.cron.Entries() {
+		if e.Next.IsZero() || e.Next.After(now) {
+			return false
+		}
+	}
+	return len(s.cron.Entries()) > 0
+}
+
+func (s *Scheduler) Reload(jobs []Job) {
+	appLogger.Println("[调度器] 重新加载任务...")
+	s.cron.Stop()
+	s.cron = cron.New(
+		cron.WithLocation(time.Local),
+		cron.WithLogger(cron.VerbosePrintfLogger(log.New(logWriter, "[cron] ", log.Ldate|log.Ltime))),
+		cron.WithChain(cron.Recover(cron.VerbosePrintfLogger(log.New(logWriter, "[cron] ", log.Ldate|log.Ltime)))),
+	)
+	s.entries = make(map[int]cron.EntryID)
+	for _, job := range jobs {
+		if job.Enabled {
+			s.addJobEntry(job)
+		}
+	}
+	s.cron.Start()
+	appLogger.Printf("[调度器] 重新加载完成, %d 个活跃任务", len(s.entries))
+}
+
 func (s *Scheduler) PrintJobs(jobs []Job) {
 	rev := make(map[cron.EntryID]int)
 	for jobID, entryID := range s.entries {
@@ -129,7 +179,7 @@ func (s *Scheduler) NextRun(id int) (time.Time, bool) {
 
 func (s *Scheduler) addJobEntry(job Job) {
 	entryID, err := s.cron.AddFunc(job.Schedule, func() {
-		executeJob(job)
+		executeJobFn(job)
 	})
 	if err != nil {
 		appLogger.Printf("[%s] 调度表达式无效 \"%s\": %v", job.Name, job.Schedule, err)

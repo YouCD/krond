@@ -13,6 +13,8 @@ var (
 	jobResults   = make(map[int]JobResult)
 )
 
+var executeJobFn func(Job) = executeJob
+
 type JobResult struct {
 	LastRun      time.Time
 	LastDuration time.Duration

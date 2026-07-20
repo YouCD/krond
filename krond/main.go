@@ -93,7 +93,14 @@ func run() {
 		defer ticker.Stop()
 		for {
 			entries := sched.CronEntries()
-			appLogger.Printf("[诊断] cron 状态: %d 条目, 存活=%v", len(entries), sched.IsRunning())
+			enabled := 0
+			for _, j := range cfg.Jobs {
+				if j.Enabled {
+					enabled++
+				}
+			}
+			appLogger.Printf("[诊断] cron 状态: %d 条目, 存活=%v, 健康=%v, 应启用=%d",
+				len(entries), sched.IsRunning(), sched.Healthy(), enabled)
 			for _, e := range entries {
 				next := "-"
 				if !e.Next.IsZero() {
@@ -105,6 +112,15 @@ func run() {
 				}
 				appLogger.Printf("[诊断]   entry=%d next=%s prev=%s", e.ID, next, prev)
 			}
+
+			if enabled > 0 && len(entries) == 0 {
+				appLogger.Println("[诊断] ⚠ cron 条目为空但应有启用任务, 触发热修复")
+				sched.Reload(cfg.Jobs)
+			} else if sched.AllNextInPast() {
+				appLogger.Println("[诊断] ⚠ cron 所有条目的下次运行时间已过, 触发热修复")
+				sched.Reload(cfg.Jobs)
+			}
+
 			<-ticker.C
 		}
 	}()

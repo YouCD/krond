@@ -42,7 +42,7 @@ fun CronJobList(
         }
         return
     }
-    val enabledJobs = jobs.filter { it.enabled }
+    val enabledJobs = jobs.filter { it.enabled }.sortedBy { it.next }
     val disabledJobs = jobs.filter { !it.enabled }
     LazyColumn(
         modifier = modifier.fillMaxSize(),
