@@ -293,7 +293,7 @@ fi
 | `backup_contacts.sh` | 通过 Fossify Contacts 无头 Activity 备份通讯录 | 参数传输出目录、重试 3 次、等待检测 .vcf 文件、tee 双写日志 |
 | `backup_calllog.sh` | 通过 Fossify Phone 备份通话记录 | 同上模式，检测 .vcf/.xml |
 | `rsync_backup.sh` | rsync + SSH 密钥远程同步 | 3 参数（源/主机/目标）、`rsync -avz`、日志记录同步结果 |
-| `databackup_cron.sh` | 触发 Swift Backup 备份计划 | am start 封装，支持传 schedule_id |
+| `databackup_cron.sh` | 触发 Swift Backup 备份计划（旧版参考） | am start 封装，支持传 schedule_id |
 | `hello.sh` | `echo hello` | 最简验证脚本 |
 
 ### 如何创建新脚本

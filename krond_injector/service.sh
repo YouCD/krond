@@ -21,12 +21,6 @@ if [ -f "$MODDIR/krond.yaml" ] && [ ! -f /data/krond/krond.yaml ]; then
     chmod 644 /data/krond/krond.yaml
 fi
 
-# 如果 /data/krond/scripts 还没有 databackup_cron.sh 则复制
-if [ -f "$MODDIR/scripts/databackup_cron.sh" ] && [ ! -f /data/krond/scripts/databackup_cron.sh ]; then
-    cp "$MODDIR/scripts/databackup_cron.sh" /data/krond/scripts/databackup_cron.sh
-    chmod 755 /data/krond/scripts/databackup_cron.sh
-fi
-
 # 安装/更新管理 App
 APK_SRC=$MODDIR/KrondInjector.apk
 if [ -f "$APK_SRC" ]; then

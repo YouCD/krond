@@ -284,19 +284,19 @@ func TestHealthy(t *testing.T) {
 	}
 }
 
-func TestAllNextInPastEmpty(t *testing.T) {
+func TestHasStaleEntryEmpty(t *testing.T) {
 	sched, _ := setupSched(t)
-	if sched.AllNextInPast() {
-		t.Fatal("empty scheduler should not report all_next_in_past")
+	if sched.HasStaleEntry() {
+		t.Fatal("empty scheduler should not report stale")
 	}
 }
 
-func TestAllNextInPastScheduled(t *testing.T) {
+func TestHasStaleEntryScheduled(t *testing.T) {
 	sched, _ := setupSched(t)
 	sched.AddJob(Job{ID: 1, Schedule: "0 0 1 1 *", Enabled: true})
 
-	if sched.AllNextInPast() {
-		t.Fatal("job far in future should not trigger all_next_in_past")
+	if sched.HasStaleEntry() {
+		t.Fatal("job far in future should not trigger stale")
 	}
 }
 
@@ -572,14 +572,14 @@ func TestAddJobThenUpdateThenRemove(t *testing.T) {
 	}
 }
 
-func TestAllNextInPastWithRunningCron(t *testing.T) {
+func TestHasStaleEntryWithRunningCron(t *testing.T) {
 	sched, _ := setupSched(t)
 	sched.AddJob(Job{ID: 1, Schedule: "0 0 * * *", Enabled: true})
 	sched.Start()
 	defer sched.Stop()
 
-	if sched.AllNextInPast() {
-		t.Fatal("running cron should not report all_next_in_past if next is future")
+	if sched.HasStaleEntry() {
+		t.Fatal("running cron should not report stale if next is future")
 	}
 }
 

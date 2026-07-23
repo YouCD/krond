@@ -91,6 +91,7 @@ func run() {
 		time.Sleep(15 * time.Second)
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
+		lastCheck := time.Now()
 		for {
 			entries := sched.CronEntries()
 			enabled := 0
@@ -116,11 +117,23 @@ func run() {
 			if enabled > 0 && len(entries) == 0 {
 				appLogger.Println("[诊断] ⚠ cron 条目为空但应有启用任务, 触发热修复")
 				sched.Reload(cfg.Jobs)
-			} else if sched.AllNextInPast() {
-				appLogger.Println("[诊断] ⚠ cron 所有条目的下次运行时间已过, 触发热修复")
+		} else if time.Since(lastCheck) > 30*time.Minute {
+			appLogger.Println("[诊断] ⚠ 检测到深度睡眠唤醒 (墙钟跳跃)")
+			missed := sched.MissedJobs(cfg.Jobs)
+			if len(missed) > 0 {
+				appLogger.Printf("[诊断]   发现 %d 个过期任务, 执行中...", len(missed))
+				for _, job := range missed {
+					appLogger.Printf("[诊断]   — 执行过期任务 [%s] (原定 %s)", job.Name, job.Schedule)
+					executeJobFn(job)
+				}
+			}
+			sched.Reload(cfg.Jobs)
+			} else if sched.HasStaleEntry() {
+				appLogger.Println("[诊断] ⚠ 检测到过期任务, 触发热修复")
 				sched.Reload(cfg.Jobs)
 			}
 
+			lastCheck = time.Now()
 			<-ticker.C
 		}
 	}()

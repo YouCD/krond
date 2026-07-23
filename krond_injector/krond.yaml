@@ -1,5 +1,5 @@
 socket: "@krond"
-log_file: "/data/krond/krond.log"
+log_file: "/data/krond/logs/krond.log"
 pid_file: "/data/krond/krond.pid"
 log_target: "file"
 jobs:
